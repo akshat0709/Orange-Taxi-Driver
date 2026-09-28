@@ -24,10 +24,12 @@ import {
 } from 'lucide-react-native';
 import { Booking } from '../types';
 import { formatRupees } from '../lib/formatters';
+import { openGoogleMaps, resolveBookingTargetCoords } from '../lib/locationResolver';
 
 interface ActiveRideSheetProps {
   booking: Booking;
   onUpdateStatus: (newStatus: 'arrived' | 'in_progress' | 'completed', extraUpdates?: Record<string, any>) => void;
+  onFinishRide?: () => void;
   onOpenChat: () => void;
   theme?: 'light' | 'dark';
 }
@@ -35,6 +37,7 @@ interface ActiveRideSheetProps {
 export function ActiveRideSheet({
   booking,
   onUpdateStatus,
+  onFinishRide,
   onOpenChat,
   theme = 'dark',
 }: ActiveRideSheetProps) {
@@ -44,6 +47,13 @@ export function ActiveRideSheet({
   const [cashConfirmed, setCashConfirmed] = useState(false);
 
   const status = booking.status;
+
+  function handleOpenGmaps() {
+    const coords = resolveBookingTargetCoords(booking);
+    if (coords) {
+      openGoogleMaps(coords.lat, coords.lng, coords.label);
+    }
+  }
 
   function handleCallPassenger() {
     Haptics.selectionAsync();
@@ -118,8 +128,14 @@ export function ActiveRideSheet({
               </Text>
             </View>
 
-            {/* Quick Contact Actions */}
+            {/* Quick Contact & Navigation Actions */}
             <View style={styles.contactActions}>
+              <TouchableOpacity
+                style={[styles.actionCircleBtn, styles.actionNavBtn]}
+                onPress={handleOpenGmaps}
+              >
+                <Navigation size={18} color="#FFFFFF" />
+              </TouchableOpacity>
               <TouchableOpacity style={styles.actionCircleBtn} onPress={handleCallPassenger}>
                 <Phone size={18} color="#FFFFFF" />
               </TouchableOpacity>
@@ -211,14 +227,22 @@ export function ActiveRideSheet({
               </Text>
             </View>
 
-            <View style={styles.comfortPills}>
-              <View style={styles.comfortBadge}>
-                <Snowflake size={12} color="#0284C7" />
-                <Text style={styles.comfortBadgeText}>22°C</Text>
-              </View>
-              <View style={styles.comfortBadge}>
-                <VolumeX size={12} color="#7C3AED" />
-                <Text style={styles.comfortBadgeText}>Quiet</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                style={[styles.actionCircleBtn, styles.actionNavBtn]}
+                onPress={handleOpenGmaps}
+              >
+                <Navigation size={18} color="#FFFFFF" />
+              </TouchableOpacity>
+              <View style={styles.comfortPills}>
+                <View style={styles.comfortBadge}>
+                  <Snowflake size={12} color="#0284C7" />
+                  <Text style={styles.comfortBadgeText}>22°C</Text>
+                </View>
+                <View style={styles.comfortBadge}>
+                  <VolumeX size={12} color="#7C3AED" />
+                  <Text style={styles.comfortBadgeText}>Quiet</Text>
+                </View>
               </View>
             </View>
           </View>
@@ -289,9 +313,14 @@ export function ActiveRideSheet({
             <TouchableOpacity
               style={styles.doneTripBtn}
               onPress={() => {
-                Haptics.selectionAsync();
-                onUpdateStatus('completed');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                if (onFinishRide) {
+                  onFinishRide();
+                } else {
+                  onUpdateStatus('completed');
+                }
               }}
+              activeOpacity={0.8}
             >
               <Text style={styles.doneTripBtnText}>READY FOR NEXT RIDE</Text>
             </TouchableOpacity>
@@ -391,6 +420,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#334155',
+  },
+  actionNavBtn: {
+    backgroundColor: '#0284C7',
+    borderColor: '#0369A1',
   },
   primaryActionButton: {
     flexDirection: 'row',

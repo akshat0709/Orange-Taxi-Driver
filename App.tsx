@@ -44,6 +44,7 @@ import { InRideChatModal } from './src/components/InRideChatModal';
 import { ChauffeurAuthModal } from './src/components/ChauffeurAuthModal';
 import { formatRupees, round2 } from './src/lib/formatters';
 import { soundService } from './src/lib/soundService';
+import { resolveBookingTargetCoords } from './src/lib/locationResolver';
 
 const { width } = Dimensions.get('window');
 
@@ -642,6 +643,16 @@ export default function App() {
     setActiveBooking((prev) => (prev ? { ...prev, ...updates } : null));
   };
 
+  // Finish Ride Handler (called when chauffeur taps "READY FOR NEXT RIDE")
+  const handleFinishRide = async () => {
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {}
+    setActiveBooking(null);
+    const currentDriverId = driver?.id || DEMO_DRIVER.id;
+    await fetchTodayStats(currentDriverId);
+  };
+
   // Claim Scheduled Ride
   const handleClaimScheduledRide = (ride: Booking) => {
     setClaimedScheduledRides((prev) => [ride, ...prev]);
@@ -679,9 +690,10 @@ export default function App() {
           }}
           targetCoords={
             activeBooking
-              ? activeBooking.status === 'in_progress'
-                ? { lat: 13.1986, lng: 77.7066, label: activeBooking.drop_area }
-                : { lat: 12.9784, lng: 77.6408, label: activeBooking.pickup_area }
+              ? resolveBookingTargetCoords(activeBooking, {
+                  lat: driverLocation.latitude,
+                  lng: driverLocation.longitude,
+                })
               : null
           }
           status={activeBooking?.status || (isOnline ? 'idle' : 'offline')}
@@ -824,6 +836,7 @@ export default function App() {
           <ActiveRideSheet
             booking={activeBooking}
             onUpdateStatus={handleRideStatusUpdate}
+            onFinishRide={handleFinishRide}
             onOpenChat={() => setShowChatModal(true)}
             theme="dark"
           />

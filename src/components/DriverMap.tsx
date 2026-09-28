@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, Platform, Linking, Dimensions
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Navigation, Crosshair, MapPin, ExternalLink, Car } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { openGoogleMaps } from '../lib/locationResolver';
 
 export const DARK_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#0F172A' }] },
@@ -90,17 +91,7 @@ export function DriverMap({
 
   function handleOpenExternalNavigation() {
     if (!targetCoords) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const { lat, lng } = targetCoords;
-    const label = encodeURIComponent(targetCoords.label || 'Destination');
-    const url = Platform.select({
-      ios: `maps:0,0?q=${label}@${lat},${lng}`,
-      android: `google.navigation:q=${lat},${lng}`,
-    }) || `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-
-    Linking.openURL(url).catch(() => {
-      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
-    });
+    openGoogleMaps(targetCoords.lat, targetCoords.lng, targetCoords.label);
   }
 
   function handleRecenterPress() {
@@ -210,7 +201,7 @@ export function DriverMap({
           <Crosshair size={20} color="#F97316" />
         </TouchableOpacity>
 
-        {/* Launch Turn-by-Turn Google Maps / Apple Maps Navigation */}
+        {/* Launch Google Maps Navigation */}
         {targetCoords && (
           <TouchableOpacity
             style={styles.navLaunchBtn}
@@ -218,8 +209,8 @@ export function DriverMap({
             activeOpacity={0.85}
           >
             <Navigation size={16} color="#FFFFFF" />
-            <Text style={styles.navLaunchBtnText}>Turn-by-Turn Nav</Text>
-            <ExternalLink size={13} color="rgba(255,255,255,0.7)" />
+            <Text style={styles.navLaunchBtnText}>Navigate</Text>
+            <ExternalLink size={13} color="rgba(255,255,255,0.8)" />
           </TouchableOpacity>
         )}
       </View>
