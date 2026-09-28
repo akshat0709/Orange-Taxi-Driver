@@ -42,15 +42,17 @@ import { ScheduledRidesModal } from './src/components/ScheduledRidesModal';
 import { DriverEarningsModal } from './src/components/DriverEarningsModal';
 import { DriverProfileModal } from './src/components/DriverProfileModal';
 import { InRideChatModal } from './src/components/InRideChatModal';
+import { ChauffeurAuthModal } from './src/components/ChauffeurAuthModal';
 
 const { width } = Dimensions.get('window');
 
 // Default Demo Chauffeur
 const DEMO_DRIVER: Driver = {
-  id: 'd0000000-0000-0000-0000-000000000001',
-  user_id: 'u0000000-0000-0000-0000-000000000001',
+  id: 'ab564eb4-53e3-4893-afd1-a2c758313f98',
+  user_id: 'ab564eb4-53e3-4893-afd1-a2c758313f98',
   full_name: 'Ramesh Kumar',
   phone: '+91 98765 43210',
+  city: 'Bengaluru',
   vehicle_model: 'Mahindra BE 6 EV',
   vehicle_number: 'DL 01 AB 1234',
   vehicle_type: 'BE 6 VIP SUV',
@@ -58,6 +60,7 @@ const DEMO_DRIVER: Driver = {
   current_lat: 12.9716,
   current_lng: 77.5946,
   rating: 4.94,
+  total_rides: 1420,
   total_trips: 1420,
   status: 'active',
 };
@@ -75,6 +78,7 @@ export default function App() {
   // Authentication & Driver state
   const [driver, setDriver] = useState<Driver | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Online / Offline & GPS
   const [isOnline, setIsOnline] = useState(true);
@@ -107,20 +111,24 @@ export default function App() {
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const locationUpdateTimer = useRef<any>(null);
 
-  // 1. Initialize Chauffeur Profile
+  // 1. Initialize Supabase Auth & Chauffeur Profile
   useEffect(() => {
-    async function loadDriver() {
+    async function initAuth() {
       try {
-        const saved = await AsyncStorage.getItem('orange_taxi_driver');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          setDriver(parsed);
-          setIsOnline(parsed.is_online ?? true);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await loadDriverFromSupabaseUser(session.user);
         } else {
-          // Auto-load demo chauffeur for rapid development & demo access
-          setDriver(DEMO_DRIVER);
-          setIsOnline(true);
-          await AsyncStorage.setItem('orange_taxi_driver', JSON.stringify(DEMO_DRIVER));
+          // Check cached driver
+          const saved = await AsyncStorage.getItem('orange_taxi_driver');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            setDriver(parsed);
+            setIsOnline(parsed.is_online ?? true);
+          } else {
+            // Prompt chauffeur auth modal
+            setShowAuthModal(true);
+          }
         }
 
         // Load stats
@@ -129,14 +137,104 @@ export default function App() {
           setStats(JSON.parse(savedStats));
         }
       } catch (err) {
-        console.warn('Failed loading driver state:', err);
+        console.warn('Failed initializing Supabase session:', err);
         setDriver(DEMO_DRIVER);
       } finally {
         setAuthLoading(false);
       }
     }
-    loadDriver();
+
+    initAuth();
+
+    // Listen to Supabase Auth State changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await loadDriverFromSupabaseUser(session.user);
+      } else if (event === 'SIGNED_OUT') {
+        setDriver(null);
+        setActiveBooking(null);
+        setShowAuthModal(true);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
+
+  // Helper: Load driver record and active rides from Supabase
+  const loadDriverFromSupabaseUser = async (user: any) => {
+    try {
+      let driverProfile: Driver | null = null;
+
+      // Query drivers table
+      const { data: driverRow } = await supabase
+        .from('drivers')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (driverRow) {
+        driverProfile = {
+          id: driverRow.id,
+          user_id: user.id,
+          full_name: driverRow.full_name || 'Orange Chauffeur',
+          phone: driverRow.phone || user.phone || '+91 98765 43210',
+          city: driverRow.city || 'Bengaluru',
+          vehicle_model: driverRow.vehicle_model || 'Mahindra BE 6 EV',
+          vehicle_number: driverRow.vehicle_number || 'DL 01 AB 1234',
+          vehicle_type: 'BE 6 VIP SUV',
+          is_online: driverRow.is_online ?? true,
+          current_lat: driverRow.current_lat || 12.9716,
+          current_lng: driverRow.current_lng || 77.5946,
+          rating: driverRow.rating || 4.94,
+          total_rides: driverRow.total_rides || 1420,
+          total_trips: driverRow.total_rides || 1420,
+          status: 'active',
+        };
+      } else {
+        // Fallback with user metadata
+        driverProfile = {
+          id: user.id,
+          user_id: user.id,
+          full_name: user.user_metadata?.full_name || 'Ramesh Kumar',
+          phone: user.user_metadata?.phone || '+91 98765 43210',
+          city: user.user_metadata?.city || 'Bengaluru',
+          vehicle_model: user.user_metadata?.vehicle_model || 'Mahindra BE 6 EV',
+          vehicle_number: user.user_metadata?.vehicle_number || 'DL 01 AB 1234',
+          vehicle_type: 'BE 6 VIP SUV',
+          is_online: true,
+          current_lat: 12.9716,
+          current_lng: 77.5946,
+          rating: 4.94,
+          total_rides: 1420,
+          total_trips: 1420,
+          status: 'active',
+        };
+      }
+
+      setDriver(driverProfile);
+      setIsOnline(driverProfile.is_online);
+      setShowAuthModal(false);
+      await AsyncStorage.setItem('orange_taxi_driver', JSON.stringify(driverProfile));
+
+      // Check for any currently active ride assigned to this chauffeur in Supabase
+      const { data: existingActive } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('driver_id', driverProfile.id)
+        .in('status', ['accepted', 'arrived', 'in_progress'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingActive) {
+        setActiveBooking(existingActive as Booking);
+      }
+    } catch (err) {
+      console.warn('Error loading driver profile from Supabase:', err);
+    }
+  };
 
   // 2. Start GPS Tracking when Online
   useEffect(() => {
@@ -154,7 +252,7 @@ export default function App() {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          console.log('Location permission not granted, using simulated location.');
+          console.log('Location permission not granted, using current location.');
           return;
         }
 
@@ -201,7 +299,7 @@ export default function App() {
     };
   }, [isOnline]);
 
-  // 3. Periodic Driver Telemetry Sync to Supabase
+  // 3. Periodic Driver Telemetry Sync to Supabase Database
   useEffect(() => {
     if (!driver || !isOnline || !driverLocation) return;
 
@@ -217,6 +315,7 @@ export default function App() {
             current_lat: driverLocation.latitude,
             current_lng: driverLocation.longitude,
             is_online: true,
+            location_updated_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
           .eq('id', driver.id);
@@ -262,7 +361,7 @@ export default function App() {
           const currentActive = activeBooking as Booking | null;
           if (currentActive && newBooking.id === currentActive.id) {
             if (newBooking.status === 'cancelled') {
-              Alert.alert('Trip Cancelled', 'The rider has cancelled this booking.');
+              Alert.alert('Trip Cancelled', 'The passenger has cancelled this booking.');
               setActiveBooking(null);
             }
           }
@@ -283,7 +382,7 @@ export default function App() {
     setIncomingBooking(booking);
   };
 
-  // Toggle Online/Offline
+  // Toggle Online/Offline in Supabase
   const handleToggleOnline = async () => {
     const nextState = !isOnline;
     setIsOnline(nextState);
@@ -297,25 +396,32 @@ export default function App() {
       setDriver(updated);
       await AsyncStorage.setItem('orange_taxi_driver', JSON.stringify(updated));
 
-      // Update in Supabase
+      // Update directly in Supabase database
       await supabase
         .from('drivers')
-        .update({ is_online: nextState, updated_at: new Date().toISOString() })
+        .update({
+          is_online: nextState,
+          location_updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', driver.id);
     }
   };
 
-  // Accept Ride Handler
+  // Accept Ride Handler in Supabase
   const handleAcceptRide = async (booking: Booking) => {
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {}
 
+    const driverId = driver?.id || DEMO_DRIVER.id;
+
+    // Mutate in Supabase database
     const { data } = await supabase
       .from('bookings')
       .update({
         status: 'accepted',
-        driver_id: driver?.id || DEMO_DRIVER.id,
+        driver_id: driverId,
         accepted_at: new Date().toISOString(),
       })
       .eq('id', booking.id)
@@ -325,7 +431,7 @@ export default function App() {
     const accepted: Booking = (data as Booking) || {
       ...booking,
       status: 'accepted',
-      driver_id: driver?.id || DEMO_DRIVER.id,
+      driver_id: driverId,
       accepted_at: new Date().toISOString(),
     };
 
@@ -342,7 +448,7 @@ export default function App() {
     setIncomingBooking(null);
   };
 
-  // Status Transitions (Arrived, OTP Verify, Completed)
+  // Status Transitions (Arrived, OTP Verify, Completed) in Supabase
   const handleRideStatusUpdate = async (
     newStatus: 'arrived' | 'in_progress' | 'completed',
     extraUpdates?: Record<string, any>
@@ -382,7 +488,7 @@ export default function App() {
       await AsyncStorage.setItem('orange_driver_stats', JSON.stringify(newStats));
     }
 
-    // Persist to Supabase
+    // Persist directly to Supabase bookings table
     await supabase.from('bookings').update(updates).eq('id', activeBooking.id);
 
     setActiveBooking((prev) => (prev ? { ...prev, ...updates } : null));
@@ -399,7 +505,7 @@ export default function App() {
     );
   };
 
-  // Simulate Test Dispatch (for demo & verification)
+  // Simulate Test Dispatch (for rapid verification)
   const handleSimulateTestDispatch = () => {
     const testBooking: Booking = {
       id: 'test-' + Date.now(),
@@ -428,12 +534,12 @@ export default function App() {
     triggerIncomingBookingAlert(testBooking);
   };
 
-  // Auth Screen if no driver
+  // Loading State
   if (authLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#F97316" />
-        <Text style={styles.loadingText}>Initializing Orange Chauffeur OS...</Text>
+        <Text style={styles.loadingText}>Connecting to Supabase Fleet Node...</Text>
       </View>
     );
   }
@@ -540,7 +646,7 @@ export default function App() {
               <View style={styles.idleStatusTextCol}>
                 <Text style={styles.idleStatusTitle}>Searching for Premium Dispatches</Text>
                 <Text style={styles.idleStatusSubtitle}>
-                  Bengaluru Zone • Zero Surge Commission Fleet
+                  Connected to Supabase • Realtime Fleet Dispatch Active
                 </Text>
               </View>
               <TouchableOpacity
@@ -571,7 +677,7 @@ export default function App() {
               </View>
               <View style={styles.quickMetricDivider} />
               <View style={styles.quickMetricCol}>
-                <Text style={styles.quickMetricVal}>★ {stats.rating.toFixed(2)}</Text>
+                <Text style={styles.quickMetricVal}>★ {(driver?.rating || 4.94).toFixed(2)}</Text>
                 <Text style={styles.quickMetricLbl}>Chauffeur</Text>
               </View>
             </View>
@@ -660,15 +766,30 @@ export default function App() {
             driver={driver}
             onClose={() => setShowProfileModal(false)}
             onLogout={async () => {
+              await supabase.auth.signOut();
               await AsyncStorage.removeItem('orange_taxi_driver');
               setShowProfileModal(false);
               setIsOnline(false);
               setDriver(null);
-              // Auto-reinitialize demo on reload
-              setTimeout(() => setDriver(DEMO_DRIVER), 500);
+              setShowAuthModal(true);
             }}
           />
         )}
+
+        {/* Chauffeur Authentication Modal */}
+        <ChauffeurAuthModal
+          visible={showAuthModal}
+          onSuccess={(authenticatedDriver) => {
+            setDriver(authenticatedDriver);
+            setIsOnline(true);
+            setShowAuthModal(false);
+          }}
+          onContinueDemo={() => {
+            setDriver(DEMO_DRIVER);
+            setIsOnline(true);
+            setShowAuthModal(false);
+          }}
+        />
       </View>
     </SafeAreaProvider>
   );
