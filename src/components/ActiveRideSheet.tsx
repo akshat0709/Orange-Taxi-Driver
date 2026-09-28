@@ -23,6 +23,7 @@ import {
   ExternalLink,
 } from 'lucide-react-native';
 import { Booking } from '../types';
+import { formatRupees } from '../lib/formatters';
 
 interface ActiveRideSheetProps {
   booking: Booking;
@@ -78,7 +79,7 @@ export function ActiveRideSheet({
   function handleCompleteTrip() {
     Alert.alert(
       'Complete Trip?',
-      `Are you sure you have arrived at the passenger's destination?\n\nTotal Fare: ₹${booking.estimated_fare}`,
+      `Are you sure you have arrived at the passenger's destination?\n\nTotal Fare: ₹${formatRupees(booking.estimated_fare)}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -248,7 +249,7 @@ export function ActiveRideSheet({
           <View style={[styles.settlementCard, isDark && styles.settlementCardDark]}>
             <View style={styles.fareRow}>
               <Text style={styles.fareLabel}>Trip Fare (Zero Surge)</Text>
-              <Text style={[styles.fareValue, isDark && styles.textWhite]}>₹{booking.estimated_fare}</Text>
+              <Text style={[styles.fareValue, isDark && styles.textWhite]}>₹{formatRupees(booking.estimated_fare)}</Text>
             </View>
             <View style={styles.fareRow}>
               <Text style={styles.fareLabel}>Payment Mode</Text>
@@ -261,7 +262,7 @@ export function ActiveRideSheet({
               <View style={styles.cashNoticeBox}>
                 <Banknote size={18} color="#F97316" />
                 <Text style={styles.cashNoticeText}>
-                  Please collect ₹{booking.estimated_fare} in cash from the passenger.
+                  Please collect ₹{formatRupees(booking.estimated_fare)} in cash from the passenger.
                 </Text>
               </View>
             ) : (
@@ -282,7 +283,7 @@ export function ActiveRideSheet({
                 setCashConfirmed(true);
               }}
             >
-              <Text style={styles.confirmCashBtnText}>CONFIRM CASH COLLECTED (₹{booking.estimated_fare})</Text>
+              <Text style={styles.confirmCashBtnText}>CONFIRM CASH COLLECTED (₹{formatRupees(booking.estimated_fare)})</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity

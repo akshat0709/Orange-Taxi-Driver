@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { X, TrendingUp, IndianRupee, Banknote, CreditCard, Clock, Calendar } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { Booking } from '../types';
+import { formatRupees, round2 } from '../lib/formatters';
 
 interface DriverEarningsModalProps {
   visible: boolean;
@@ -45,13 +46,14 @@ export function DriverEarningsModal({
   async function fetchTrips() {
     setLoading(true);
     try {
+      // Query completed bookings for this driver
       const { data } = await supabase
         .from('bookings')
         .select('*')
         .eq('driver_id', driverId)
         .eq('status', 'completed')
         .order('completed_at', { ascending: false })
-        .limit(30);
+        .limit(50);
 
       if (data) {
         setCompletedTrips(data as Booking[]);
@@ -63,12 +65,21 @@ export function DriverEarningsModal({
     }
   }
 
-  // Calculate earnings metrics
-  const totalEarnings = completedTrips.reduce((acc, t) => acc + (t.final_fare || t.estimated_fare || 0), 0);
-  const cashTotal = completedTrips
-    .filter((t) => t.payment_method === 'cash')
-    .reduce((acc, t) => acc + (t.final_fare || t.estimated_fare || 0), 0);
-  const digitalTotal = totalEarnings - cashTotal;
+  // Calculate earnings metrics rounded strictly to 2 decimal places
+  const rawTotal = completedTrips.reduce(
+    (acc, t) => acc + (Number(t.final_fare) || Number(t.estimated_fare) || 0),
+    0
+  );
+  // Net earnings: 85% chauffeur payout
+  const totalEarnings = round2(rawTotal * 0.85);
+
+  const cashTotal = round2(
+    completedTrips
+      .filter((t) => t.payment_method === 'cash')
+      .reduce((acc, t) => acc + (Number(t.final_fare) || Number(t.estimated_fare) || 0), 0)
+  );
+
+  const digitalTotal = round2(Math.max(0, totalEarnings - cashTotal));
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
@@ -95,7 +106,7 @@ export function DriverEarningsModal({
             <Text style={styles.mainCardLabel}>Total Net Earnings</Text>
             <View style={styles.mainCardAmountRow}>
               <IndianRupee size={28} color="#FFFFFF" />
-              <Text style={styles.mainCardAmount}>{totalEarnings.toFixed(2)}</Text>
+              <Text style={styles.mainCardAmount}>{formatRupees(totalEarnings)}</Text>
             </View>
             <Text style={styles.mainCardSub}>{completedTrips.length} Completed Trips Today</Text>
           </View>
@@ -108,7 +119,9 @@ export function DriverEarningsModal({
               </View>
               <View>
                 <Text style={styles.breakdownLabel}>Cash in Hand</Text>
-                <Text style={[styles.breakdownValue, isDark && styles.textWhite]}>₹{cashTotal}</Text>
+                <Text style={[styles.breakdownValue, isDark && styles.textWhite]}>
+                  ₹{formatRupees(cashTotal)}
+                </Text>
               </View>
             </View>
 
@@ -118,7 +131,9 @@ export function DriverEarningsModal({
               </View>
               <View>
                 <Text style={styles.breakdownLabel}>Bank Payout</Text>
-                <Text style={[styles.breakdownValue, isDark && styles.textWhite]}>₹{digitalTotal}</Text>
+                <Text style={[styles.breakdownValue, isDark && styles.textWhite]}>
+                  ₹{formatRupees(digitalTotal)}
+                </Text>
               </View>
             </View>
           </View>
@@ -152,10 +167,12 @@ export function DriverEarningsModal({
                     <Text style={styles.tripMeta}>
                       {item.completed_at
                         ? new Date(item.completed_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                        : 'Today'} · {item.distance_km} km · {item.payment_method === 'cash' ? '💵 Cash' : '💳 Digital'}
+                        : 'Today'} · {Number(item.distance_km || 0).toFixed(1)} km · {item.payment_method === 'cash' ? '💵 Cash' : '💳 Digital'}
                     </Text>
                   </View>
-                  <Text style={styles.tripFare}>+₹{item.final_fare || item.estimated_fare}</Text>
+                  <Text style={styles.tripFare}>
+                    +₹{formatRupees(item.final_fare || item.estimated_fare)}
+                  </Text>
                 </View>
               )}
             />
@@ -212,7 +229,7 @@ const styles = StyleSheet.create({
   mainCardDark: { backgroundColor: '#1E293B' },
   mainCardLabel: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' },
   mainCardAmountRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 4 },
-  mainCardAmount: { fontSize: 38, fontWeight: '900', color: '#FFFFFF' },
+  mainCardAmount: { fontSize: 34, fontWeight: '900', color: '#FFFFFF' },
   mainCardSub: { fontSize: 12, color: '#10B981', fontWeight: '700', marginTop: 8 },
   breakdownRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   breakdownItem: {
@@ -236,7 +253,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   breakdownLabel: { fontSize: 10, color: '#64748B', fontWeight: '700' },
-  breakdownValue: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginTop: 1 },
+  breakdownValue: { fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 1 },
   ledgerTitle: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, color: '#0F172A', marginBottom: 12 },
   tripRow: {
     flexDirection: 'row',

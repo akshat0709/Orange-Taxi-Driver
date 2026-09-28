@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { X, Calendar, Clock, MapPin, Navigation, CheckCircle, ChevronRight, ShieldCheck } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { Booking } from '../types';
+import { formatRupees } from '../lib/formatters';
 
 interface ScheduledRidesModalProps {
   visible: boolean;
@@ -69,7 +70,7 @@ export function ScheduledRidesModal({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
       'Pre-Accept Scheduled Ride?',
-      `Are you sure you want to lock in this departure?\n\n📅 Departure: ${ride.scheduled_at ? new Date(ride.scheduled_at).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Advance'}\n📍 Route: ${ride.pickup_area} → ${ride.drop_area}\n💰 Fare: ₹${ride.estimated_fare}`,
+      `Are you sure you want to lock in this departure?\n\n📅 Departure: ${ride.scheduled_at ? new Date(ride.scheduled_at).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Advance'}\n📍 Route: ${ride.pickup_area} → ${ride.drop_area}\n💰 Fare: ₹${formatRupees(ride.estimated_fare)}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -147,7 +148,7 @@ export function ScheduledRidesModal({
                       <Clock size={12} color="#7C3AED" />
                       <Text style={styles.dateBadgeText}>{formattedDate}</Text>
                     </View>
-                    <Text style={styles.fareAmount}>₹{item.estimated_fare}</Text>
+                    <Text style={styles.fareAmount}>₹{formatRupees(item.estimated_fare)}</Text>
                   </View>
 
                   {/* Route */}

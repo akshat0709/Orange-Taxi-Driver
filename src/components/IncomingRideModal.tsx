@@ -11,6 +11,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { MapPin, Navigation, Banknote, CreditCard, Wallet, Car, Clock, ShieldCheck } from 'lucide-react-native';
 import { Booking } from '../types';
+import { formatRupees } from '../lib/formatters';
 
 interface IncomingRideModalProps {
   booking: Booking | null;
@@ -84,7 +85,7 @@ export function IncomingRideModal({
             </View>
 
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.fareAmount}>₹{booking.estimated_fare}</Text>
+              <Text style={styles.fareAmount}>₹{formatRupees(booking.estimated_fare)}</Text>
               <View style={styles.paymentMethodRow}>
                 {booking.payment_method === 'cash' ? (
                   <Banknote size={12} color="#10B981" />
@@ -174,7 +175,7 @@ export function IncomingRideModal({
               }}
               activeOpacity={0.85}
             >
-              <Text style={styles.acceptBtnText}>ACCEPT RIDE · ₹{booking.estimated_fare}</Text>
+              <Text style={styles.acceptBtnText}>ACCEPT RIDE · ₹{formatRupees(booking.estimated_fare)}</Text>
             </TouchableOpacity>
           </View>
         </View>
