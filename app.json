@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Orange Chauffeur",
+    "slug": "orange-taxi-driver",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0D11",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.orangetaxi.driver",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Orange Driver requires live GPS access to navigate to passenger pickup bays and broadcast location.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Orange Driver broadcasts real-time GPS coordinates while on active trips for passenger safety and dispatch.",
+        "UIBackgroundModes": [
+          "location"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.orangetaxi.driver",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyD-IOH9cMppWtKjw_zn-m7XOE3ut62HVX8"
+        }
+      },
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0D11",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      }
+    }
+  }
+}
