@@ -30,7 +30,6 @@ import {
   Clock,
   ArrowRight,
   RefreshCw,
-  Zap,
 } from 'lucide-react-native';
 
 import { supabase } from './src/lib/supabase';
@@ -44,6 +43,7 @@ import { DriverProfileModal } from './src/components/DriverProfileModal';
 import { InRideChatModal } from './src/components/InRideChatModal';
 import { ChauffeurAuthModal } from './src/components/ChauffeurAuthModal';
 import { formatRupees, round2 } from './src/lib/formatters';
+import { soundService } from './src/lib/soundService';
 
 const { width } = Dimensions.get('window');
 
@@ -390,10 +390,82 @@ export default function App() {
     };
   }, [driver, isOnline, driverLocation]);
 
-  // 4. Supabase Realtime Channel for Incoming Dispatches
-  useEffect(() => {
-    if (!isOnline || !driver || activeBooking) return;
+  // Helper: Trigger Incoming Ride with Passenger Profile Enrichment and Dispatch Sound
+  const triggerIncomingBookingAlert = async (booking: Booking) => {
+    // Avoid double triggering if already ringing for the same booking
+    if (incomingBooking?.id === booking.id) return;
 
+    let enrichedBooking: Booking = { ...booking };
+
+    // Fetch passenger profile from Supabase profiles table if customer_id exists
+    if (booking.customer_id) {
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name, phone')
+          .eq('id', booking.customer_id)
+          .maybeSingle();
+
+        if (profile) {
+          if (profile.full_name) enrichedBooking.customer_name = profile.full_name;
+          if (profile.phone) enrichedBooking.customer_phone = profile.phone;
+        }
+      } catch (err) {
+        console.warn('Could not enrich passenger profile:', err);
+      }
+    }
+
+    if (!enrichedBooking.customer_name) enrichedBooking.customer_name = 'Executive Passenger';
+    if (!enrichedBooking.customer_phone) enrichedBooking.customer_phone = '+91 98450 00000';
+
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {}
+
+    // Play energetic alert chime immediately
+    await soundService.playDispatchAlert();
+    setIncomingBooking(enrichedBooking);
+  };
+
+  // 4. Supabase Realtime Channel & Polling Fallback for Incoming Passenger Dispatches
+  useEffect(() => {
+    if (!isOnline || !driver) return;
+
+    // Check for pending unassigned dispatches from Supabase
+    const checkForPendingDispatches = async () => {
+      if (activeBooking || incomingBooking) return;
+      try {
+        const { data: searchingBookings, error } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('status', 'searching')
+          .is('driver_id', null)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!error && searchingBookings && searchingBookings.length > 0) {
+          const candidate = searchingBookings[0] as Booking;
+          if (
+            candidate &&
+            !declinedBookingIds.includes(candidate.id) &&
+            !activeBooking &&
+            !incomingBooking
+          ) {
+            await triggerIncomingBookingAlert(candidate);
+          }
+        }
+      } catch (err) {
+        // Silent catch for network hiccups
+      }
+    };
+
+    // Run check immediately on going online
+    checkForPendingDispatches();
+
+    // Polling fallback every 3 seconds to guarantee no missed rides
+    const pollTimer = setInterval(checkForPendingDispatches, 3000);
+
+    // Supabase Realtime Channel for Instant Broadcasts
     const channel = supabase
       .channel('driver-booking-broadcasts')
       .on(
@@ -403,23 +475,29 @@ export default function App() {
           schema: 'public',
           table: 'bookings',
         },
-        (payload) => {
+        async (payload) => {
           const newBooking = payload.new as Booking;
           if (!newBooking) return;
 
-          // If a new booking is searching and not declined
+          // If a new booking is searching and not assigned
           if (
             newBooking.status === 'searching' &&
+            !newBooking.driver_id &&
             !declinedBookingIds.includes(newBooking.id) &&
-            !activeBooking
+            !activeBooking &&
+            !incomingBooking
           ) {
-            triggerIncomingBookingAlert(newBooking);
+            await triggerIncomingBookingAlert(newBooking);
           }
 
-          // If our active booking is cancelled by rider
-          const currentActive = activeBooking as Booking | null;
-          if (currentActive && newBooking.id === currentActive.id) {
-            if (newBooking.status === 'cancelled') {
+          // If active or incoming booking is cancelled by rider
+          if (newBooking.status === 'cancelled') {
+            if (incomingBooking && newBooking.id === incomingBooking.id) {
+              await soundService.stopDispatchAlert();
+              setIncomingBooking(null);
+              Alert.alert('Trip Cancelled', 'The passenger has cancelled this request.');
+            }
+            if (activeBooking && newBooking.id === activeBooking.id) {
               Alert.alert('Trip Cancelled', 'The passenger has cancelled this booking.');
               setActiveBooking(null);
             }
@@ -429,17 +507,10 @@ export default function App() {
       .subscribe();
 
     return () => {
+      clearInterval(pollTimer);
       supabase.removeChannel(channel);
     };
-  }, [isOnline, driver, activeBooking, declinedBookingIds]);
-
-  // Helper: Trigger Incoming Ride
-  const triggerIncomingBookingAlert = (booking: Booking) => {
-    try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {}
-    setIncomingBooking(booking);
-  };
+  }, [isOnline, driver, activeBooking, incomingBooking, declinedBookingIds]);
 
   // Toggle Online/Offline in Supabase
   const handleToggleOnline = async () => {
@@ -449,6 +520,11 @@ export default function App() {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch {}
+
+    if (!nextState) {
+      await soundService.stopDispatchAlert();
+      setIncomingBooking(null);
+    }
 
     if (driver) {
       const updated = { ...driver, is_online: nextState };
@@ -472,11 +548,13 @@ export default function App() {
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {}
+    await soundService.playAcceptChime();
 
     const driverId = driver?.id || DEMO_DRIVER.id;
 
-    // Mutate in Supabase database
-    const { data } = await supabase
+    // Mutate in Supabase database with FK resilience
+    let updatedBookingData: Booking | null = null;
+    const { data, error } = await supabase
       .from('bookings')
       .update({
         status: 'accepted',
@@ -485,9 +563,26 @@ export default function App() {
       })
       .eq('id', booking.id)
       .select()
-      .single();
+      .maybeSingle();
 
-    const accepted: Booking = (data as Booking) || {
+    if (error && error.code === '23503') {
+      // If driver_id foreign key constraint triggers, update status directly so the trip proceeds seamlessly
+      const { data: fallbackData } = await supabase
+        .from('bookings')
+        .update({
+          status: 'accepted',
+          accepted_at: new Date().toISOString(),
+        })
+        .eq('id', booking.id)
+        .select()
+        .maybeSingle();
+
+      updatedBookingData = fallbackData as Booking;
+    } else {
+      updatedBookingData = data as Booking;
+    }
+
+    const accepted: Booking = updatedBookingData || {
       ...booking,
       status: 'accepted',
       driver_id: driverId,
@@ -499,10 +594,11 @@ export default function App() {
   };
 
   // Decline Ride Handler
-  const handleDeclineRide = (booking: Booking) => {
+  const handleDeclineRide = async (booking: Booking) => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch {}
+    await soundService.stopDispatchAlert();
     setDeclinedBookingIds((prev) => [...prev, booking.id]);
     setIncomingBooking(null);
   };
@@ -557,34 +653,7 @@ export default function App() {
     );
   };
 
-  // Simulate Test Dispatch (for rapid verification)
-  const handleSimulateTestDispatch = () => {
-    const testBooking: Booking = {
-      id: 'test-' + Date.now(),
-      reference: 'OT-' + Math.floor(1000 + Math.random() * 9000),
-      customer_id: 'cust-demo-1',
-      driver_id: null,
-      pickup_area: 'Indiranagar 100ft Road',
-      pickup_address: '12th Main, HAL 2nd Stage, Indiranagar, Bengaluru',
-      drop_area: 'Kempegowda International Airport (BLR)',
-      drop_address: 'Terminal 2 Departures, Devanahalli, Bengaluru',
-      distance_km: 38.4,
-      duration_min: 52,
-      vehicle_code: 'BE6',
-      vehicle_name: 'Mahindra BE 6 VIP EV',
-      base_fare: 450,
-      distance_fare: 960,
-      tax_amount: 70,
-      estimated_fare: 1480.00,
-      status: 'searching',
-      payment_method: 'upi',
-      payment_status: 'pending',
-      ride_otp: '4829',
-      customer_name: 'Ananya Sharma',
-      customer_phone: '+91 98450 11223',
-    };
-    triggerIncomingBookingAlert(testBooking);
-  };
+
 
   // Loading State
   if (authLoading) {
@@ -701,14 +770,6 @@ export default function App() {
                   Connected to Supabase • Realtime Fleet Dispatch Active
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.testDispatchBtn}
-                onPress={handleSimulateTestDispatch}
-                activeOpacity={0.7}
-              >
-                <Zap size={14} color="#FFFFFF" />
-                <Text style={styles.testDispatchBtnText}>Test</Text>
-              </TouchableOpacity>
             </View>
 
             {/* Quick Metrics Bar - Today's Live Net Earnings formatted to 2 decimals */}
@@ -1046,20 +1107,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  testDispatchBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F97316',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 12,
-  },
-  testDispatchBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
-  },
+
   quickMetricsRow: {
     flexDirection: 'row',
     alignItems: 'center',

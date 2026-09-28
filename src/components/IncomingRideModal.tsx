@@ -12,6 +12,7 @@ import * as Haptics from 'expo-haptics';
 import { MapPin, Navigation, Banknote, CreditCard, Wallet, Car, Clock, ShieldCheck } from 'lucide-react-native';
 import { Booking } from '../types';
 import { formatRupees } from '../lib/formatters';
+import { soundService } from '../lib/soundService';
 
 interface IncomingRideModalProps {
   booking: Booking | null;
@@ -34,18 +35,21 @@ export function IncomingRideModal({
   useEffect(() => {
     if (!booking) {
       setSecondsRemaining(RING_DURATION);
+      soundService.stopDispatchAlert();
       return;
     }
 
     setSecondsRemaining(RING_DURATION);
 
-    // Initial alert vibration
+    // Initial alert vibration and continuous audible sound alert
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    soundService.playDispatchAlert();
 
     const timer = setInterval(() => {
       setSecondsRemaining((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
+          soundService.stopDispatchAlert();
           onDecline(booking);
           return 0;
         }
@@ -56,7 +60,10 @@ export function IncomingRideModal({
       });
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      soundService.stopDispatchAlert();
+    };
   }, [booking?.id]);
 
   if (!booking) return null;
@@ -160,6 +167,7 @@ export function IncomingRideModal({
               style={[styles.declineBtn, isDark && styles.declineBtnDark]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                soundService.stopDispatchAlert();
                 onDecline(booking);
               }}
               activeOpacity={0.8}
@@ -171,6 +179,7 @@ export function IncomingRideModal({
               style={styles.acceptBtn}
               onPress={() => {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                soundService.playAcceptChime();
                 onAccept(booking);
               }}
               activeOpacity={0.85}
