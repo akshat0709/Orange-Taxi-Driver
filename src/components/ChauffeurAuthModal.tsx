@@ -31,17 +31,24 @@ export function ChauffeurAuthModal({
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [vehicleNumber, setVehicleNumber] = useState('');
-  const [vehicleModel, setVehicleModel] = useState('Mahindra BE 6 EV');
+  const [cdlNumber, setCdlNumber] = useState('');
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [yearsDriving, setYearsDriving] = useState('');
   const [city, setCity] = useState('Bengaluru');
   const [loading, setLoading] = useState(false);
-  const [dlUrl, setDlUrl] = useState('');
+  const [driverPhotoUrl, setDriverPhotoUrl] = useState('');
+  const [documentsUrl, setDocumentsUrl] = useState('');
 
-  // Mock DL Upload
-  const handleUploadDL = () => {
+  const handleUploadDriverPhoto = () => {
     // In a real app, this would open image picker.
-    setDlUrl('mock_dl_url_' + Date.now());
-    Alert.alert('Success', 'Driving License uploaded successfully.');
+    setDriverPhotoUrl('mock_photo_url_' + Date.now());
+    Alert.alert('Success', 'Driver photo uploaded successfully.');
+  };
+
+  const handleUploadDocuments = () => {
+    // In a real app, this would open image picker.
+    setDocumentsUrl('mock_docs_url_' + Date.now());
+    Alert.alert('Success', 'Documents uploaded successfully.');
   };
 
   // Standard Email/Password Sign In
@@ -99,8 +106,8 @@ export function ChauffeurAuthModal({
 
   // Sign Up New Chauffeur
   const handleSignUp = async () => {
-    if (!email.trim() || !password.trim() || !fullName.trim() || !phone.trim() || !dlUrl) {
-      Alert.alert('Required Fields', 'Please complete all chauffeur details and upload your Driving License.');
+    if (!email.trim() || !password.trim() || !fullName.trim() || !phone.trim() || !cdlNumber.trim() || !aadhaarNumber.trim() || !yearsDriving.trim() || !city.trim() || !driverPhotoUrl || !documentsUrl) {
+      Alert.alert('Required Fields', 'Please complete all chauffeur details and upload your documents.');
       return;
     }
 
@@ -114,11 +121,13 @@ export function ChauffeurAuthModal({
           data: {
             full_name: fullName.trim(),
             phone: phone.trim(),
-            role: 'driver',
-            vehicle_number: vehicleNumber.trim() || 'DL 01 EV 1001',
-            vehicle_model: vehicleModel.trim() || 'Mahindra BE 6 EV',
+            role: 'driver_pending',
             city,
-            dl_url: dlUrl,
+            cdl_number: cdlNumber.trim(),
+            aadhaar_number: aadhaarNumber.trim(),
+            years_driving: yearsDriving.trim(),
+            driver_photo_url: driverPhotoUrl,
+            documents_url: documentsUrl,
           },
         },
       });
@@ -130,12 +139,15 @@ export function ChauffeurAuthModal({
         try {
           await supabase.from('driver_applications').insert({
             user_id: data.user.id,
+            email: email.trim(),
             full_name: fullName.trim(),
             phone: phone.trim(),
-            vehicle_number: vehicleNumber.trim() || 'DL 01 EV 1001',
-            vehicle_model: vehicleModel.trim() || 'Mahindra BE 6 EV',
             city,
-            dl_url: dlUrl,
+            cdl_number: cdlNumber.trim(),
+            aadhaar_number: aadhaarNumber.trim(),
+            years_driving: yearsDriving.trim(),
+            driver_photo_url: driverPhotoUrl,
+            documents_url: documentsUrl,
             status: 'pending'
           });
         } catch (e) {
@@ -143,26 +155,8 @@ export function ChauffeurAuthModal({
         }
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-        const driverProfile: Driver = {
-          id: data.user.id,
-          user_id: data.user.id,
-          full_name: fullName.trim(),
-          phone: phone.trim(),
-          city,
-          vehicle_model: vehicleModel.trim() || 'Mahindra BE 6 EV',
-          vehicle_number: vehicleNumber.trim() || 'DL 01 EV 1001',
-          vehicle_type: 'BE 6 VIP SUV',
-          is_online: true,
-          current_lat: 12.9716,
-          current_lng: 77.5946,
-          rating: 5.0,
-          total_rides: 0,
-          total_trips: 0,
-          status: 'active',
-        };
-
-        onSuccess(driverProfile);
+        Alert.alert('Application Submitted', 'Your application has been submitted and is pending admin approval.');
+        setMode('signin');
       }
     } catch (err: any) {
       Alert.alert('Registration Error', err.message || 'Could not register chauffeur.');
@@ -243,29 +237,81 @@ export function ChauffeurAuthModal({
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Vehicle Number Plate</Text>
+                  <Text style={styles.inputLabel}>City</Text>
                   <View style={styles.inputRow}>
-                    <Car size={18} color="#94A3B8" style={{ marginRight: 10 }} />
                     <TextInput
                       style={styles.textInput}
-                      placeholder="DL 01 AB 1234"
+                      placeholder="e.g. Bengaluru"
                       placeholderTextColor="#64748B"
-                      autoCapitalize="characters"
-                      value={vehicleNumber}
-                      onChangeText={setVehicleNumber}
+                      value={city}
+                      onChangeText={setCity}
                     />
                   </View>
                 </View>
 
-                {/* DL Upload Button */}
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Driving License</Text>
+                  <Text style={styles.inputLabel}>Years Driving</Text>
+                  <View style={styles.inputRow}>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="e.g. 5"
+                      placeholderTextColor="#64748B"
+                      keyboardType="numeric"
+                      value={yearsDriving}
+                      onChangeText={setYearsDriving}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Commercial Driving Licence Number</Text>
+                  <View style={styles.inputRow}>
+                    <Car size={18} color="#94A3B8" style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="e.g. KA0120230000000"
+                      placeholderTextColor="#64748B"
+                      autoCapitalize="characters"
+                      value={cdlNumber}
+                      onChangeText={setCdlNumber}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Aadhaar Number</Text>
+                  <View style={styles.inputRow}>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="e.g. 1234 5678 9012"
+                      placeholderTextColor="#64748B"
+                      keyboardType="numeric"
+                      value={aadhaarNumber}
+                      onChangeText={setAadhaarNumber}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Driver Photo</Text>
                   <TouchableOpacity
-                    style={[styles.inputRow, { justifyContent: 'center', backgroundColor: dlUrl ? '#10B98120' : '#0F172A', borderColor: dlUrl ? '#10B981' : '#334155' }]}
-                    onPress={handleUploadDL}
+                    style={[styles.inputRow, { justifyContent: 'center', backgroundColor: driverPhotoUrl ? '#10B98120' : '#0F172A', borderColor: driverPhotoUrl ? '#10B981' : '#334155' }]}
+                    onPress={handleUploadDriverPhoto}
                   >
-                    <Text style={{ color: dlUrl ? '#10B981' : '#F97316', fontWeight: 'bold' }}>
-                      {dlUrl ? '✓ Driving License Uploaded' : 'Upload Driving License Picture'}
+                    <Text style={{ color: driverPhotoUrl ? '#10B981' : '#F97316', fontWeight: 'bold' }}>
+                      {driverPhotoUrl ? '✓ Driver Photo Uploaded' : 'Upload Driver Photo'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Documents (DL & Aadhaar)</Text>
+                  <TouchableOpacity
+                    style={[styles.inputRow, { justifyContent: 'center', backgroundColor: documentsUrl ? '#10B98120' : '#0F172A', borderColor: documentsUrl ? '#10B981' : '#334155' }]}
+                    onPress={handleUploadDocuments}
+                  >
+                    <Text style={{ color: documentsUrl ? '#10B981' : '#F97316', fontWeight: 'bold' }}>
+                      {documentsUrl ? '✓ Documents Uploaded' : 'Upload Documents (DL & Aadhaar)'}
                     </Text>
                   </TouchableOpacity>
                 </View>
