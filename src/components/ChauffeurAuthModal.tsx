@@ -160,19 +160,24 @@ export function ChauffeurAuthModal({
       if (data?.user) {
         // Attempt to insert into driver_applications
         try {
-          await supabase.from('driver_applications').insert({
+          const { error: insertErr } = await supabase.from('driver_applications').insert({
             email: email.trim(),
             full_name: fullName.trim(),
             phone: phone.trim(),
-            city: city,
+            city: city || 'Unknown',
             licence_number: cdlNumber.trim(),
             aadhaar_number: aadhaarNumber.trim(),
             experience_years: parseInt(yearsDriving) || 0,
-            photo_url: driverPhotoUrl,
-            dl_url: documentsUrl,
+            photo_url: driverPhotoUrl || '',
+            dl_url: documentsUrl || '',
             owns_vehicle: ownsVehicle,
-            status: 'new'
+            status: 'new',
+            message: ''
           });
+          if (insertErr) {
+            Alert.alert('Database Error', JSON.stringify(insertErr));
+            return;
+          }
         } catch (e) {
           console.warn('Could not insert driver application', e);
         }
