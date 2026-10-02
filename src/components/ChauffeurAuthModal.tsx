@@ -41,6 +41,11 @@ export function ChauffeurAuthModal({
   const [driverPhotoUrl, setDriverPhotoUrl] = useState('');
   const [documentsUrl, setDocumentsUrl] = useState('');
   const [ownsVehicle, setOwnsVehicle] = useState(false);
+  const [vehicleModel, setVehicleModel] = useState('');
+  const [vehicleYear, setVehicleYear] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [chassisNumber, setChassisNumber] = useState('');
+  const [message, setMessage] = useState('');
 
   const handleUploadDriverPhoto = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, base64: true });
@@ -171,8 +176,12 @@ export function ChauffeurAuthModal({
             photo_url: driverPhotoUrl || '',
             dl_url: documentsUrl || '',
             owns_vehicle: ownsVehicle,
+            vehicle_model: ownsVehicle ? vehicleModel.trim() : null,
+            vehicle_year: ownsVehicle ? parseInt(vehicleYear) || null : null,
+            vehicle_number: ownsVehicle ? vehicleNumber.trim() : null,
+            chassis_number: ownsVehicle ? chassisNumber.trim() : null,
             status: 'new',
-            message: ''
+            message: message.trim()
           });
           if (insertErr) {
             Alert.alert('Database Error', JSON.stringify(insertErr));
@@ -359,6 +368,80 @@ export function ChauffeurAuthModal({
                     </Text>
                   </TouchableOpacity>
                 </View>
+
+                {ownsVehicle && (
+                  <>
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Vehicle Model</Text>
+                      <View style={styles.inputRow}>
+                        <TextInput
+                          style={styles.textInput}
+                          placeholder="e.g. Mahindra BE 6 EV"
+                          placeholderTextColor="#64748B"
+                          value={vehicleModel}
+                          onChangeText={setVehicleModel}
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Vehicle Year</Text>
+                      <View style={styles.inputRow}>
+                        <TextInput
+                          style={styles.textInput}
+                          placeholder="e.g. 2024"
+                          placeholderTextColor="#64748B"
+                          keyboardType="numeric"
+                          value={vehicleYear}
+                          onChangeText={setVehicleYear}
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Vehicle Registration Number</Text>
+                      <View style={styles.inputRow}>
+                        <TextInput
+                          style={styles.textInput}
+                          placeholder="e.g. DL 01 AB 1234"
+                          placeholderTextColor="#64748B"
+                          autoCapitalize="characters"
+                          value={vehicleNumber}
+                          onChangeText={setVehicleNumber}
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Chassis Number</Text>
+                      <View style={styles.inputRow}>
+                        <TextInput
+                          style={styles.textInput}
+                          placeholder="Enter chassis number"
+                          placeholderTextColor="#64748B"
+                          autoCapitalize="characters"
+                          value={chassisNumber}
+                          onChangeText={setChassisNumber}
+                        />
+                      </View>
+                    </View>
+                  </>
+                )}
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Message</Text>
+                  <View style={[styles.inputRow, { height: 100, alignItems: 'flex-start', paddingTop: 10 }]}>
+                    <TextInput
+                      style={[styles.textInput, { textAlignVertical: 'top' }]}
+                      placeholder="Anything else you'd like us to know?"
+                      placeholderTextColor="#64748B"
+                      multiline
+                      numberOfLines={4}
+                      value={message}
+                      onChangeText={setMessage}
+                    />
+                  </View>
+                </View>
               </>
             )}
 
@@ -392,6 +475,12 @@ export function ChauffeurAuthModal({
                 />
               </View>
             </View>
+
+            {mode === 'signup' && (
+              <Text style={styles.disclaimerText}>
+                By submitting this form, you consent to the collection and processing of your personal data in accordance with the Digital Personal Data Protection (DPDP) Act, 2023.
+              </Text>
+            )}
 
             {/* Submit Action Button */}
             <TouchableOpacity
@@ -602,5 +691,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+  disclaimerText: {
+    color: '#64748B',
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 16,
   },
 });
