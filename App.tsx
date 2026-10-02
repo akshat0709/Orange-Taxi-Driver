@@ -891,14 +891,7 @@ export default function App() {
                 <Text style={styles.earningsPillText}>₹{formatRupees(stats.todayEarnings)}</Text>
               </TouchableOpacity>
 
-              {/* KYC Screen Shortcut */}
-              <TouchableOpacity
-                style={styles.headerIconBtn}
-                onPress={() => setShowKYCModal(true)}
-                activeOpacity={0.7}
-              >
-                <Shield size={18} color="#F8FAFC" />
-              </TouchableOpacity>
+              
 
               {/* Profile Avatar */}
               <TouchableOpacity
