@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Shield, Lock, Mail, Phone, User, Car, Zap, CheckCircle2 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
 import { Driver } from '../types';
 
@@ -38,17 +40,38 @@ export function ChauffeurAuthModal({
   const [loading, setLoading] = useState(false);
   const [driverPhotoUrl, setDriverPhotoUrl] = useState('');
   const [documentsUrl, setDocumentsUrl] = useState('');
+  const [ownsVehicle, setOwnsVehicle] = useState(false);
 
-  const handleUploadDriverPhoto = () => {
-    // In a real app, this would open image picker.
-    setDriverPhotoUrl('mock_photo_url_' + Date.now());
-    Alert.alert('Success', 'Driver photo uploaded successfully.');
+  const handleUploadDriverPhoto = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, base64: true });
+    if (!result.canceled && result.assets[0].base64) {
+      const base64 = result.assets[0].base64;
+      const fileName = `photo_${Date.now()}.jpg`;
+      const { data, error } = await supabase.storage.from('driver_kyc').upload(fileName, decode(base64), { contentType: 'image/jpeg' });
+      if (error) {
+        Alert.alert('Upload Error', error.message);
+      } else if (data) {
+        const { data: publicData } = supabase.storage.from('driver_kyc').getPublicUrl(data.path);
+        setDriverPhotoUrl(publicData.publicUrl);
+        Alert.alert('Success', 'Driver photo uploaded successfully.');
+      }
+    }
   };
 
-  const handleUploadDocuments = () => {
-    // In a real app, this would open image picker.
-    setDocumentsUrl('mock_docs_url_' + Date.now());
-    Alert.alert('Success', 'Documents uploaded successfully.');
+  const handleUploadDocuments = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, base64: true });
+    if (!result.canceled && result.assets[0].base64) {
+      const base64 = result.assets[0].base64;
+      const fileName = `doc_${Date.now()}.jpg`;
+      const { data, error } = await supabase.storage.from('driver_kyc').upload(fileName, decode(base64), { contentType: 'image/jpeg' });
+      if (error) {
+        Alert.alert('Upload Error', error.message);
+      } else if (data) {
+        const { data: publicData } = supabase.storage.from('driver_kyc').getPublicUrl(data.path);
+        setDocumentsUrl(publicData.publicUrl);
+        Alert.alert('Success', 'Documents uploaded successfully.');
+      }
+    }
   };
 
   // Standard Email/Password Sign In
@@ -148,6 +171,7 @@ export function ChauffeurAuthModal({
             years_driving: yearsDriving.trim(),
             driver_photo_url: driverPhotoUrl,
             documents_url: documentsUrl,
+            owns_vehicle: ownsVehicle,
             status: 'pending'
           });
         } catch (e) {
@@ -312,6 +336,22 @@ export function ChauffeurAuthModal({
                   >
                     <Text style={{ color: documentsUrl ? '#10B981' : '#F97316', fontWeight: 'bold' }}>
                       {documentsUrl ? '✓ Documents Uploaded' : 'Upload Documents (DL & Aadhaar)'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <TouchableOpacity
+                    style={[styles.inputRow, { justifyContent: 'flex-start', backgroundColor: ownsVehicle ? '#10B98120' : '#0F172A', borderColor: ownsVehicle ? '#10B981' : '#334155' }]}
+                    onPress={() => setOwnsVehicle(!ownsVehicle)}
+                  >
+                    {ownsVehicle ? (
+                      <CheckCircle2 size={20} color="#10B981" style={{ marginRight: 10 }} />
+                    ) : (
+                      <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: '#64748B', marginRight: 10 }} />
+                    )}
+                    <Text style={{ color: '#FFFFFF', fontSize: 13, flex: 1 }}>
+                      I bring my own Orange Standard Car (Partner Driver)
                     </Text>
                   </TouchableOpacity>
                 </View>
