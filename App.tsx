@@ -106,32 +106,13 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
 
 const { width } = Dimensions.get('window');
 
-// Default Demo Chauffeur
-const DEMO_DRIVER: Driver = {
-  id: 'ab564eb4-53e3-4893-afd1-a2c758313f98',
-  user_id: 'ab564eb4-53e3-4893-afd1-a2c758313f98',
-  full_name: 'Ramesh Kumar',
-  phone: '+91 98765 43210',
-  city: 'Bengaluru',
-  vehicle_model: 'Mahindra BE 6 EV',
-  vehicle_number: 'DL 01 AB 1234',
-  vehicle_type: 'BE 6 VIP SUV',
-  is_online: true,
-  current_lat: 12.9716,
-  current_lng: 77.5946,
-  rating: 4.94,
-  total_rides: 1420,
-  total_trips: 1420,
-  status: 'active',
-};
-
 const INITIAL_STATS: DriverStats = {
   todayEarnings: 0,
   todayTrips: 0,
   todayHours: 0,
   cashCollected: 0,
-  rating: 4.94,
-  acceptanceRate: 98,
+  rating: 0,
+  acceptanceRate: 0,
 };
 
 
@@ -183,6 +164,7 @@ export default function App() {
   const [driver, setDriver] = useState<Driver | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isPendingApproval, setIsPendingApproval] = useState(false);
 
   // Online / Offline & GPS
   const [isOnline, setIsOnline] = useState(true);
@@ -249,8 +231,8 @@ export default function App() {
           todayTrips: tripsCount,
           todayHours: round2(tripsCount * 0.75),
           cashCollected: cashTotal,
-          rating: driver?.rating || 4.94,
-          acceptanceRate: 98,
+          rating: driver?.rating || 0,
+          acceptanceRate: 0,
         };
 
         setStats(updatedStats);
@@ -338,41 +320,27 @@ export default function App() {
           id: driverRow.id,
           user_id: user.id,
           full_name: driverRow.full_name || 'Orange Chauffeur',
-          phone: driverRow.phone || user.phone || '+91 98765 43210',
+          phone: driverRow.phone || user.phone || '',
           city: driverRow.city || 'Bengaluru',
-          vehicle_model: driverRow.vehicle_model || 'Mahindra BE 6 EV',
-          vehicle_number: driverRow.vehicle_number || 'DL 01 AB 1234',
-          vehicle_type: 'BE 6 VIP SUV',
+          vehicle_model: driverRow.vehicle_model || 'No Vehicle Assigned',
+          vehicle_number: driverRow.vehicle_number || '',
+          vehicle_type: driverRow.vehicle_type || '',
           is_online: driverRow.is_online ?? true,
           current_lat: driverRow.current_lat || 12.9716,
           current_lng: driverRow.current_lng || 77.5946,
-          rating: driverRow.rating || 4.94,
-          total_rides: driverRow.total_rides || 1420,
-          total_trips: driverRow.total_rides || 1420,
-          status: 'active',
+          rating: driverRow.rating || 0,
+          total_rides: driverRow.total_rides || 0,
+          total_trips: driverRow.total_rides || 0,
+          status: driverRow.status || 'active',
         };
       } else {
-        // Fallback with user metadata
-        driverProfile = {
-          id: user.id,
-          user_id: user.id,
-          full_name: user.user_metadata?.full_name || 'Ramesh Kumar',
-          phone: user.user_metadata?.phone || '+91 98765 43210',
-          city: user.user_metadata?.city || 'Bengaluru',
-          vehicle_model: user.user_metadata?.vehicle_model || 'Mahindra BE 6 EV',
-          vehicle_number: user.user_metadata?.vehicle_number || 'DL 01 AB 1234',
-          vehicle_type: 'BE 6 VIP SUV',
-          is_online: true,
-          current_lat: 12.9716,
-          current_lng: 77.5946,
-          rating: 4.94,
-          total_rides: 1420,
-          total_trips: 1420,
-          status: 'active',
-        };
+        setIsPendingApproval(true);
+        setAuthLoading(false);
+        return;
       }
 
       setDriver(driverProfile);
+      setIsPendingApproval(false);
       setIsOnline(driverProfile.is_online);
       setShowAuthModal(false);
       await AsyncStorage.setItem('orange_taxi_driver', JSON.stringify(driverProfile));
@@ -817,6 +785,33 @@ export default function App() {
     );
   }
 
+  if (isPendingApproval) {
+    return (
+      <SafeAreaProvider>
+        <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
+          <Shield size={64} color="#F97316" style={{ marginBottom: 24 }} />
+          <Text style={{ color: '#FFF', fontSize: 24, fontWeight: '800', marginBottom: 12, textAlign: 'center' }}>
+            Pending Approval
+          </Text>
+          <Text style={{ color: '#94A3B8', fontSize: 16, textAlign: 'center', marginBottom: 48, lineHeight: 24 }}>
+            Your application is currently under review by Orange Taxi Admin. Please check back later.
+          </Text>
+          <TouchableOpacity
+            style={styles.goOnlineBigBtn}
+            onPress={async () => {
+              await supabase.auth.signOut();
+              await AsyncStorage.removeItem('orange_taxi_driver');
+              setIsPendingApproval(false);
+              setShowAuthModal(true);
+            }}
+          >
+            <Text style={styles.goOnlineBigBtnText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <View style={styles.container}>
@@ -1215,11 +1210,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 6,
+    overflow: 'hidden',
   },
   avatarLetter: {
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '900',
+    lineHeight: 22,
+    textAlign: 'center',
   },
   idleBottomCard: {
     position: 'absolute',
