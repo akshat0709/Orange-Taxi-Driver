@@ -41,6 +41,7 @@ export function ChauffeurAuthModal({
   const [driverPhotoUrl, setDriverPhotoUrl] = useState('');
   const [documentsUrl, setDocumentsUrl] = useState('');
   const [ownsVehicle, setOwnsVehicle] = useState(false);
+  const [showPartnerTermsModal, setShowPartnerTermsModal] = useState(false);
   const [vehicleModel, setVehicleModel] = useState('');
   const [vehicleYear, setVehicleYear] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
@@ -356,7 +357,13 @@ export function ChauffeurAuthModal({
                 <View style={styles.inputGroup}>
                   <TouchableOpacity
                     style={[styles.inputRow, { justifyContent: 'flex-start', backgroundColor: ownsVehicle ? '#10B98120' : '#0F172A', borderColor: ownsVehicle ? '#10B981' : '#334155' }]}
-                    onPress={() => setOwnsVehicle(!ownsVehicle)}
+                    onPress={() => {
+                      if (!ownsVehicle) {
+                        setShowPartnerTermsModal(true);
+                      } else {
+                        setOwnsVehicle(false);
+                      }
+                    }}
                   >
                     {ownsVehicle ? (
                       <CheckCircle2 size={20} color="#10B981" style={{ marginRight: 10 }} />
@@ -500,6 +507,63 @@ export function ChauffeurAuthModal({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal visible={showPartnerTermsModal} animationType="slide" transparent={true}>
+        <View style={styles.termsOverlay}>
+          <View style={styles.termsContainer}>
+            <Text style={styles.termsTitle}>Orange Standard Cab</Text>
+            <Text style={styles.termsSubtitle}>Vehicle Requirements</Text>
+            
+            <ScrollView style={styles.termsScroll}>
+              <View style={styles.termCard}>
+                <Zap size={24} color="#F97316" style={styles.termIcon} />
+                <View style={styles.termTextContainer}>
+                  <Text style={styles.termCardTitle}>1. 100% Electric Vehicle (EV)</Text>
+                  <Text style={styles.termCardDesc}>Must be a fully electric vehicle. No hybrids or internal combustion engines allowed. We are committed to a zero-emission future.</Text>
+                </View>
+              </View>
+
+              <View style={styles.termCard}>
+                <Car size={24} color="#F97316" style={styles.termIcon} />
+                <View style={styles.termTextContainer}>
+                  <Text style={styles.termCardTitle}>2. Signature Orange Exterior Color</Text>
+                  <Text style={styles.termCardDesc}>The vehicle must feature our signature Orange Standard exterior color to maintain brand consistency and visibility.</Text>
+                </View>
+              </View>
+
+              <View style={styles.termCard}>
+                <CheckCircle2 size={24} color="#F97316" style={styles.termIcon} />
+                <View style={styles.termTextContainer}>
+                  <Text style={styles.termCardTitle}>3. Spotless Interior & Pre-Cooled AC</Text>
+                  <Text style={styles.termCardDesc}>Maintain an impeccably clean interior and ensure the AC is pre-cooled for maximum passenger comfort before every ride.</Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.termsActions}>
+              <TouchableOpacity 
+                style={styles.termsCancelBtn} 
+                onPress={() => {
+                  setOwnsVehicle(false);
+                  setShowPartnerTermsModal(false);
+                }}
+              >
+                <Text style={styles.termsCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.termsAgreeBtn}
+                onPress={() => {
+                  setOwnsVehicle(true);
+                  setShowPartnerTermsModal(false);
+                }}
+              >
+                <Text style={styles.termsAgreeText}>I Agree & Continue</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -698,5 +762,97 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
     lineHeight: 16,
+  },
+  termsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  termsContainer: {
+    backgroundColor: '#1E293B',
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#334155',
+    maxHeight: '80%',
+  },
+  termsTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '900',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  termsSubtitle: {
+    color: '#94A3B8',
+    fontSize: 14,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  termsScroll: {
+    marginBottom: 20,
+  },
+  termCard: {
+    flexDirection: 'row',
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  termIcon: {
+    marginRight: 16,
+    marginTop: 2,
+  },
+  termTextContainer: {
+    flex: 1,
+  },
+  termCardTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  termCardDesc: {
+    color: '#94A3B8',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  termsActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  termsCancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  termsCancelText: {
+    color: '#94A3B8',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  termsAgreeBtn: {
+    flex: 2,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#F97316',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+  termsAgreeText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });
