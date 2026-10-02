@@ -20,13 +20,11 @@ import { Driver } from '../types';
 interface ChauffeurAuthModalProps {
   visible: boolean;
   onSuccess: (driver: Driver) => void;
-  onContinueDemo: () => void;
 }
 
 export function ChauffeurAuthModal({
   visible,
   onSuccess,
-  onContinueDemo,
 }: ChauffeurAuthModalProps) {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -37,56 +35,13 @@ export function ChauffeurAuthModal({
   const [vehicleModel, setVehicleModel] = useState('Mahindra BE 6 EV');
   const [city, setCity] = useState('Bengaluru');
   const [loading, setLoading] = useState(false);
+  const [dlUrl, setDlUrl] = useState('');
 
-  // One-Tap Verified Chauffeur Quick Login
-  const handleQuickChauffeurLogin = async () => {
-    setLoading(true);
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: 'chauffeur@orangetaxi.in',
-        password: 'OrangeTaxi2026!',
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      if (data?.user) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        
-        // Fetch or build driver profile
-        const { data: driverRow } = await supabase
-          .from('drivers')
-          .select('*')
-          .eq('user_id', data.user.id)
-          .maybeSingle();
-
-        const driverProfile: Driver = {
-          id: driverRow?.id || data.user.id,
-          user_id: data.user.id,
-          full_name: driverRow?.full_name || data.user.user_metadata?.full_name || 'Ramesh Kumar',
-          phone: driverRow?.phone || data.user.user_metadata?.phone || '+91 98765 43210',
-          city: driverRow?.city || 'Bengaluru',
-          vehicle_model: driverRow?.vehicle_model || 'Mahindra BE 6 EV',
-          vehicle_number: driverRow?.vehicle_number || 'DL 01 AB 1234',
-          vehicle_type: 'BE 6 VIP SUV',
-          is_online: true,
-          current_lat: driverRow?.current_lat || 12.9716,
-          current_lng: driverRow?.current_lng || 77.5946,
-          rating: driverRow?.rating || 4.94,
-          total_rides: driverRow?.total_rides || 1420,
-          total_trips: driverRow?.total_rides || 1420,
-          status: 'active',
-        };
-
-        onSuccess(driverProfile);
-      }
-    } catch (err: any) {
-      Alert.alert('Chauffeur Authentication', err.message || 'Unable to sign in. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+  // Mock DL Upload
+  const handleUploadDL = () => {
+    // In a real app, this would open image picker.
+    setDlUrl('mock_dl_url_' + Date.now());
+    Alert.alert('Success', 'Driving License uploaded successfully.');
   };
 
   // Standard Email/Password Sign In
@@ -144,8 +99,8 @@ export function ChauffeurAuthModal({
 
   // Sign Up New Chauffeur
   const handleSignUp = async () => {
-    if (!email.trim() || !password.trim() || !fullName.trim() || !phone.trim()) {
-      Alert.alert('Required Fields', 'Please complete all chauffeur details.');
+    if (!email.trim() || !password.trim() || !fullName.trim() || !phone.trim() || !dlUrl) {
+      Alert.alert('Required Fields', 'Please complete all chauffeur details and upload your Driving License.');
       return;
     }
 
@@ -163,6 +118,7 @@ export function ChauffeurAuthModal({
             vehicle_number: vehicleNumber.trim() || 'DL 01 EV 1001',
             vehicle_model: vehicleModel.trim() || 'Mahindra BE 6 EV',
             city,
+            dl_url: dlUrl,
           },
         },
       });
@@ -170,6 +126,22 @@ export function ChauffeurAuthModal({
       if (error) throw error;
 
       if (data?.user) {
+        // Attempt to insert into driver_applications
+        try {
+          await supabase.from('driver_applications').insert({
+            user_id: data.user.id,
+            full_name: fullName.trim(),
+            phone: phone.trim(),
+            vehicle_number: vehicleNumber.trim() || 'DL 01 EV 1001',
+            vehicle_model: vehicleModel.trim() || 'Mahindra BE 6 EV',
+            city,
+            dl_url: dlUrl,
+            status: 'pending'
+          });
+        } catch (e) {
+          console.warn('Could not insert driver application', e);
+        }
+
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
         const driverProfile: Driver = {
@@ -215,36 +187,6 @@ export function ChauffeurAuthModal({
             <Text style={styles.brandSubtitle}>
               Connected to Supabase Cloud Database • Live Fleet Node
             </Text>
-          </View>
-
-          {/* Quick 1-Tap Login Card */}
-          <TouchableOpacity
-            style={styles.quickCard}
-            onPress={handleQuickChauffeurLogin}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            <View style={styles.quickCardHeader}>
-              <View style={styles.quickZapCircle}>
-                <Zap size={20} color="#FFFFFF" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.quickCardTitle}>1-Tap Chauffeur Sign In</Text>
-                <Text style={styles.quickCardSub}>Verified Ramesh Kumar • Mahindra BE 6 EV</Text>
-              </View>
-              <View style={styles.verifiedBadge}>
-                <Text style={styles.verifiedBadgeText}>VERIFIED</Text>
-              </View>
-            </View>
-            <Text style={styles.quickCardFooter}>
-              Tap to authenticate instantly with live Supabase database credentials
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR CUSTOM ACCOUNT</Text>
-            <View style={styles.dividerLine} />
           </View>
 
           {/* Mode Switcher Tabs */}
@@ -314,6 +256,19 @@ export function ChauffeurAuthModal({
                     />
                   </View>
                 </View>
+
+                {/* DL Upload Button */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Driving License</Text>
+                  <TouchableOpacity
+                    style={[styles.inputRow, { justifyContent: 'center', backgroundColor: dlUrl ? '#10B98120' : '#0F172A', borderColor: dlUrl ? '#10B981' : '#334155' }]}
+                    onPress={handleUploadDL}
+                  >
+                    <Text style={{ color: dlUrl ? '#10B981' : '#F97316', fontWeight: 'bold' }}>
+                      {dlUrl ? '✓ Driving License Uploaded' : 'Upload Driving License Picture'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
 
@@ -362,15 +317,6 @@ export function ChauffeurAuthModal({
                   {mode === 'signin' ? 'Sign In to Chauffeur Console' : 'Complete Registration'}
                 </Text>
               )}
-            </TouchableOpacity>
-
-            {/* Offline Demo Skip */}
-            <TouchableOpacity
-              style={styles.demoSkipBtn}
-              onPress={onContinueDemo}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.demoSkipText}>Continue in Offline Simulator Mode</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

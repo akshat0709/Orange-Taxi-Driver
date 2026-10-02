@@ -1,3 +1,4 @@
+import "./src/i18n";
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
@@ -11,11 +12,23 @@ import {
   Platform,
   Linking,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
+import * as Device from 'expo-device';
+
+import Constants from 'expo-constants';
+let Notifications: any;
+try {
+  if (Constants.appOwnership !== 'expo') {
+    Notifications = require('expo-notifications');
+  }
+} catch(e) {}
+
+
 import {
   Radio,
   Power,
@@ -46,6 +59,51 @@ import { formatRupees, round2 } from './src/lib/formatters';
 import { soundService } from './src/lib/soundService';
 import { resolveBookingTargetCoords } from './src/lib/locationResolver';
 
+import * as TaskManager from 'expo-task-manager';
+
+
+if (Constants.appOwnership !== 'expo') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
+
+const BACKGROUND_LOCATION_TASK = 'BACKGROUND_LOCATION_TASK';
+
+TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
+  if (error) {
+    console.error('Background location task error:', error);
+    return;
+  }
+  if (data) {
+    const { locations } = data as { locations: Location.LocationObject[] };
+    const loc = locations[0];
+    if (loc) {
+      // Sync to supabase
+      const saved = await AsyncStorage.getItem('orange_taxi_driver');
+      if (saved) {
+        const driver = JSON.parse(saved);
+        if (driver.is_online) {
+          try {
+            await supabase.from('drivers').update({
+              current_lat: loc.coords.latitude,
+              current_lng: loc.coords.longitude,
+              location_updated_at: new Date().toISOString(),
+            }).eq('id', driver.id);
+          } catch(e) {}
+        }
+      }
+    }
+  }
+});
+
+
 const { width } = Dimensions.get('window');
 
 // Default Demo Chauffeur
@@ -75,6 +133,50 @@ const INITIAL_STATS: DriverStats = {
   rating: 4.94,
   acceptanceRate: 98,
 };
+
+
+async function registerForPushNotificationsAsync() {
+  if (Constants.appOwnership === 'expo') {
+    console.log('Push notifications are not supported in Expo Go SDK 53+. Skipping.');
+    return null;
+  }
+  let token;
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#EA580C',
+    });
+  }
+  if (Device.isDevice) {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') {
+      console.log('Failed to get push token for push notification!');
+      return;
+    }
+    try {
+      const projectId =
+        Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
+      if (!projectId) {
+        throw new Error('Project ID not found');
+      }
+      token = (
+        await Notifications.getExpoPushTokenAsync({
+          projectId,
+        })
+      ).data;
+    } catch (e) {
+      console.log('Error getting push token', e);
+    }
+  }
+  return token;
+}
 
 export default function App() {
   // Authentication & Driver state
@@ -195,7 +297,7 @@ export default function App() {
         }
       } catch (err) {
         console.warn('Failed initializing Supabase session:', err);
-        setDriver(DEMO_DRIVER);
+        setDriver(null); setShowAuthModal(true);
       } finally {
         setAuthLoading(false);
       }
@@ -310,11 +412,48 @@ export default function App() {
 
     async function startLocationWatch() {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.log('Location permission not granted, using current location.');
-          return;
+        
+        const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+        if (fgStatus === 'granted') {
+          // Always use foreground watch for precise updates
+          locationSubscription.current = await Location.watchPositionAsync(
+            { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 5 },
+            async (loc) => {
+              if (loc?.coords) {
+                setDriverLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+                try {
+                  const saved = await AsyncStorage.getItem('orange_taxi_driver');
+                  if (saved) {
+                    const d = JSON.parse(saved);
+                    await supabase.from('drivers').update({
+                      current_lat: loc.coords.latitude,
+                      current_lng: loc.coords.longitude,
+                      location_updated_at: new Date().toISOString(),
+                    }).eq('id', d.id);
+                  }
+                } catch (e) {}
+              }
+            }
+          );
+          
+          try {
+            await Location.requestBackgroundPermissionsAsync();
+            await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
+              accuracy: Location.Accuracy.Balanced,
+              timeInterval: 15000,
+              distanceInterval: 20,
+              showsBackgroundLocationIndicator: true,
+              foregroundService: {
+                notificationTitle: 'Orange Chauffeur Active',
+                notificationBody: 'Broadcasting live location for dispatches.',
+                notificationColor: '#F97316',
+              }
+            });
+          } catch (e) {
+            console.log('Background location error in Expo Go, falling back to foreground only', e);
+          }
         }
+
 
         const initial = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
@@ -436,11 +575,13 @@ export default function App() {
     const checkForPendingDispatches = async () => {
       if (activeBooking || incomingBooking) return;
       try {
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
         const { data: searchingBookings, error } = await supabase
           .from('bookings')
           .select('*')
           .eq('status', 'searching')
           .is('driver_id', null)
+          .gte('created_at', fiveMinutesAgo)
           .order('created_at', { ascending: false })
           .limit(1);
 
@@ -464,7 +605,7 @@ export default function App() {
     checkForPendingDispatches();
 
     // Polling fallback every 3 seconds to guarantee no missed rides
-    const pollTimer = setInterval(checkForPendingDispatches, 3000);
+    const pollTimer = setInterval(checkForPendingDispatches, 15000);
 
     // Supabase Realtime Channel for Instant Broadcasts
     const channel = supabase
@@ -551,7 +692,7 @@ export default function App() {
     } catch {}
     await soundService.playAcceptChime();
 
-    const driverId = driver?.id || DEMO_DRIVER.id;
+    const driverId = driver?.id;
 
     // Mutate in Supabase database with FK resilience
     let updatedBookingData: Booking | null = null;
@@ -636,8 +777,8 @@ export default function App() {
       await supabase.from('bookings').update(updates).eq('id', activeBooking.id);
 
       // Re-fetch driver's real today stats directly from Supabase
-      const currentDriverId = activeBooking.driver_id || driver?.id || DEMO_DRIVER.id;
-      await fetchTodayStats(currentDriverId);
+      const currentDriverId = activeBooking.driver_id || driver?.id;
+      if (currentDriverId) await fetchTodayStats(currentDriverId);
     }
 
     setActiveBooking((prev) => (prev ? { ...prev, ...updates } : null));
@@ -649,8 +790,8 @@ export default function App() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {}
     setActiveBooking(null);
-    const currentDriverId = driver?.id || DEMO_DRIVER.id;
-    await fetchTodayStats(currentDriverId);
+    const currentDriverId = driver?.id;
+    if (currentDriverId) await fetchTodayStats(currentDriverId);
   };
 
   // Claim Scheduled Ride
@@ -753,6 +894,15 @@ export default function App() {
               >
                 <Wallet size={15} color="#F97316" />
                 <Text style={styles.earningsPillText}>₹{formatRupees(stats.todayEarnings)}</Text>
+              </TouchableOpacity>
+
+              {/* KYC Screen Shortcut */}
+              <TouchableOpacity
+                style={styles.headerIconBtn}
+                onPress={() => setShowKYCModal(true)}
+                activeOpacity={0.7}
+              >
+                <Shield size={18} color="#F8FAFC" />
               </TouchableOpacity>
 
               {/* Profile Avatar */}
@@ -872,7 +1022,7 @@ export default function App() {
         <ScheduledRidesModal
           visible={showScheduledModal}
           onClose={() => setShowScheduledModal(false)}
-          driverId={driver?.id || DEMO_DRIVER.id}
+          driverId={driver?.id!}
           onClaimScheduledRide={handleClaimScheduledRide}
           theme="dark"
         />
@@ -881,7 +1031,7 @@ export default function App() {
         <DriverEarningsModal
           visible={showEarningsModal}
           onClose={() => setShowEarningsModal(false)}
-          driverId={driver?.id || DEMO_DRIVER.id}
+          driverId={driver?.id!}
           theme="dark"
         />
 
@@ -911,13 +1061,8 @@ export default function App() {
             setShowAuthModal(false);
             await fetchTodayStats(authenticatedDriver.id);
           }}
-          onContinueDemo={async () => {
-            setDriver(DEMO_DRIVER);
-            setIsOnline(true);
-            setShowAuthModal(false);
-            await fetchTodayStats(DEMO_DRIVER.id);
-          }}
         />
+
       </View>
     </SafeAreaProvider>
   );

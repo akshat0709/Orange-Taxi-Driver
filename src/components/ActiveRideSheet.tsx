@@ -8,6 +8,7 @@ import {
   Linking,
   Alert,
   Platform,
+  Keyboard, KeyboardAvoidingView,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -109,7 +110,7 @@ export function ActiveRideSheet({
   }
 
   return (
-    <View style={[styles.sheetContainer, isDark && styles.sheetContainerDark]}>
+    <KeyboardAvoidingView style={[styles.sheetContainer, isDark && styles.sheetContainerDark]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       {/* Handle */}
       <View style={styles.handleWrap}>
         <View style={[styles.handleBar, isDark && styles.handleBarDark]} />
@@ -196,7 +197,11 @@ export function ActiveRideSheet({
               onChangeText={(text) => {
                 setEnteredOtp(text);
                 setOtpError(false);
+                if (text.length === 4) {
+                  Keyboard.dismiss();
+                }
               }}
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
 
             <TouchableOpacity
@@ -327,7 +332,7 @@ export function ActiveRideSheet({
           )}
         </View>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

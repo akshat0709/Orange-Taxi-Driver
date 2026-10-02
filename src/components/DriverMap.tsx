@@ -1,10 +1,13 @@
 import React, { useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Platform, Linking, Dimensions } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import { StyleSheet, View, Text, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import MapView, { Marker, Polyline, PROVIDER_DEFAULT, PROVIDER_GOOGLE, Heatmap } from 'react-native-maps';
 import { Navigation, Crosshair, MapPin, ExternalLink, Car } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { openGoogleMaps } from '../lib/locationResolver';
 
+const { width, height } = Dimensions.get('window');
+
+// Executive, high-contrast dark cartography for dark theme mode
 export const DARK_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#0F172A' }] },
   { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
@@ -46,6 +49,7 @@ export const LIGHT_MAP_STYLE = [
 ];
 
 interface DriverMapProps {
+  demandPoints?: {latitude: number, longitude: number, weight: number}[];
   driverCoords: { lat: number; lng: number; heading?: number };
   targetCoords?: { lat: number; lng: number; label: string } | null;
   status?: string;
@@ -55,6 +59,7 @@ interface DriverMapProps {
 }
 
 export function DriverMap({
+  demandPoints = [],
   driverCoords,
   targetCoords,
   status,
@@ -95,7 +100,9 @@ export function DriverMap({
   }
 
   function handleRecenterPress() {
-    Haptics.selectionAsync();
+    try {
+      Haptics.selectionAsync();
+    } catch {}
     if (onRecenter) {
       onRecenter();
     }
@@ -115,11 +122,11 @@ export function DriverMap({
     : [];
 
   return (
-    <View style={StyleSheet.absoluteFill}>
+    <View style={styles.container}>
       <MapView
         ref={mapRef}
-        style={StyleSheet.absoluteFill}
-        provider={PROVIDER_DEFAULT}
+        style={styles.map}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
         customMapStyle={isDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE}
         userInterfaceStyle={isDark ? 'dark' : 'light'}
         initialRegion={{
@@ -161,10 +168,10 @@ export function DriverMap({
               <View
                 style={[
                   styles.targetBadge,
-                  status === 'accepted' ? styles.targetBadgePickup : styles.targetBadgeDrop,
+                  status === 'accepted' || status === 'arrived' ? styles.targetBadgePickup : styles.targetBadgeDrop,
                 ]}
               >
-                {status === 'accepted' ? (
+                {status === 'accepted' || status === 'arrived' ? (
                   <MapPin size={15} color="#FFFFFF" />
                 ) : (
                   <Navigation size={15} color="#FFFFFF" />
@@ -173,7 +180,7 @@ export function DriverMap({
               <View
                 style={[
                   styles.targetPinTail,
-                  status === 'accepted' ? styles.targetPinPickup : styles.targetPinDrop,
+                  status === 'accepted' || status === 'arrived' ? styles.targetPinPickup : styles.targetPinDrop,
                 ]}
               />
             </View>
@@ -186,8 +193,24 @@ export function DriverMap({
             coordinates={polyline}
             strokeColor={isDark ? '#F97316' : '#18181B'}
             strokeWidth={4.5}
+            lineDashPattern={[0]}
           />
         )}
+      
+        {/* Heatmap Layer */}
+        {demandPoints.length > 0 && Platform.OS === 'android' && (
+          <Heatmap
+            points={demandPoints}
+            radius={40}
+            opacity={0.7}
+            gradient={{
+              colors: ['#00000000', '#FDE047', '#F97316', '#DC2626'],
+              startPoints: [0.01, 0.25, 0.5, 1.0],
+              colorMapSize: 256
+            }}
+          />
+        )}
+
       </MapView>
 
       {/* Floating Action Buttons */}
@@ -219,6 +242,21 @@ export function DriverMap({
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  map: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   driverCarMarkerWrap: {
     alignItems: 'center',
     justifyContent: 'center',
