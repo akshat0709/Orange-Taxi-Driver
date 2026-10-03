@@ -217,7 +217,7 @@ export function DriverMap({
         )}
 
         {/* Route Connecting Line */}
-        {polyline.length > 1 && (
+        {(routePolyline.length > 1 || fallbackPolyline.length > 1) && (
           <Polyline
             coordinates={routePolyline.length > 0 ? routePolyline : fallbackPolyline}
             strokeColor={isDark ? '#F97316' : '#18181B'}
