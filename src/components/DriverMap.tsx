@@ -114,7 +114,36 @@ export function DriverMap({
     }, 400);
   }
 
-  const polyline = targetCoords
+
+  // -------------------------------------------------------------------------
+  // GOOGLE DIRECTIONS API FETCH
+  // -------------------------------------------------------------------------
+  const [routePolyline, setRoutePolyline] = React.useState<{latitude: number, longitude: number}[]>([]);
+
+  useEffect(() => {
+    if (!driverCoords.lat || !targetCoords?.lat) {
+        setRoutePolyline([]);
+        return;
+    }
+
+    const origin = `${driverCoords.lat},${driverCoords.lng}`;
+    const destination = `${targetCoords.lat},${targetCoords.lng}`;
+    const API_KEY = "AIzaSyD-IOH9cMppWtKjw_zn-m7XOE3ut62HVX8";
+    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&key=${API_KEY}`;
+    
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        if (data.routes && data.routes.length > 0) {
+            const encoded = data.routes[0].overview_polyline.points;
+            setRoutePolyline(decodePolyline(encoded));
+        }
+      })
+      .catch(e => console.log("Directions fetch error:", e));
+
+  }, [driverCoords.lat, targetCoords?.lat]);
+
+  const fallbackPolyline = targetCoords
     ? [
         { latitude: driverCoords.lat, longitude: driverCoords.lng },
         { latitude: targetCoords.lat, longitude: targetCoords.lng },
@@ -190,7 +219,7 @@ export function DriverMap({
         {/* Route Connecting Line */}
         {polyline.length > 1 && (
           <Polyline
-            coordinates={polyline}
+            coordinates={routePolyline.length > 0 ? routePolyline : fallbackPolyline}
             strokeColor={isDark ? '#F97316' : '#18181B'}
             strokeWidth={4.5}
             lineDashPattern={[0]}
