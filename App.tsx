@@ -618,6 +618,11 @@ export default function App() {
               setActiveBooking(null);
             }
           }
+          
+          // Update active booking live (e.g. if passenger pays mid-ride)
+          if (activeBooking && newBooking.id === activeBooking.id && newBooking.status !== 'cancelled') {
+            setActiveBooking((prev) => prev ? { ...prev, ...newBooking } : prev);
+          }
         }
       )
       .subscribe();

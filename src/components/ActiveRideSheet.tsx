@@ -11,6 +11,7 @@ import {
   Keyboard, KeyboardAvoidingView,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { supabase } from '../lib/supabase';
 import {
   Phone,
   MessageSquare,
@@ -287,33 +288,50 @@ export function ActiveRideSheet({
               </Text>
             </View>
 
-            {booking.payment_method === 'cash' ? (
+            {(booking.payment_method === 'cash' || booking.payment_method === 'driver_upi') ? (
               <View style={styles.cashNoticeBox}>
                 <Banknote size={18} color="#F97316" />
                 <Text style={styles.cashNoticeText}>
-                  Please collect ₹{formatRupees(booking.estimated_fare)} in cash from the passenger.
+                  Please collect ₹{formatRupees(booking.estimated_fare)} directly from the passenger.
                 </Text>
               </View>
             ) : (
               <View style={styles.digitalNoticeBox}>
                 <CheckCircle size={18} color="#10B981" />
                 <Text style={styles.digitalNoticeText}>
-                  Paid digitally. Direct payout will reflect in your driver earnings.
+                  Paid Online via Razorpay. Do NOT collect cash.
                 </Text>
               </View>
             )}
           </View>
 
-          {booking.payment_method === 'cash' && !cashConfirmed ? (
-            <TouchableOpacity
-              style={styles.confirmCashBtn}
-              onPress={() => {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                setCashConfirmed(true);
-              }}
-            >
-              <Text style={styles.confirmCashBtnText}>CONFIRM CASH COLLECTED (₹{formatRupees(booking.estimated_fare)})</Text>
-            </TouchableOpacity>
+          {(booking.payment_method === 'cash' || booking.payment_method === 'driver_upi') && !cashConfirmed ? (
+            <View style={{ gap: 10 }}>
+              <Text style={{ textAlign: 'center', fontSize: 12, fontWeight: 'bold', marginBottom: 5, color: isDark ? '#9CA3AF' : '#6B7280' }}>
+                How did the passenger pay?
+              </Text>
+              <TouchableOpacity
+                style={[styles.confirmCashBtn, { backgroundColor: '#10B981' }]}
+                onPress={() => {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  setCashConfirmed(true);
+                  supabase.from('bookings').update({ payment_method: 'cash' }).eq('id', booking.id);
+                }}
+              >
+                <Text style={styles.confirmCashBtnText}>CASH RECEIVED (₹{formatRupees(booking.estimated_fare)})</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.confirmCashBtn, { backgroundColor: '#3B82F6' }]}
+                onPress={() => {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  setCashConfirmed(true);
+                  supabase.from('bookings').update({ payment_method: 'driver_upi' }).eq('id', booking.id);
+                }}
+              >
+                <Text style={styles.confirmCashBtnText}>MY PERSONAL UPI (₹{formatRupees(booking.estimated_fare)})</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <TouchableOpacity
               style={styles.doneTripBtn}
