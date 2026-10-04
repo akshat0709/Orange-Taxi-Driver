@@ -166,7 +166,17 @@ export function ChauffeurAuthModal({
       if (data?.user) {
         // Attempt to insert into driver_applications
         try {
-          const { error: insertErr } = await supabase.from('driver_applications').insert({
+          const metaData = {
+            photo_url: driverPhotoUrl || '',
+            driver_type: ownsVehicle ? "partner" : "company",
+            vehicle_model: ownsVehicle ? vehicleModel.trim() : null,
+            vehicle_number: ownsVehicle ? vehicleNumber.trim() : null,
+            chassis_number: ownsVehicle ? chassisNumber.trim() : null,
+            vehicle_year: ownsVehicle ? parseInt(vehicleYear) || null : null,
+          };
+          const metaJson = JSON.stringify(metaData);
+
+          const fullPayload = {
             email: email.trim(),
             full_name: fullName.trim(),
             phone: phone.trim(),
@@ -182,11 +192,34 @@ export function ChauffeurAuthModal({
             vehicle_number: ownsVehicle ? vehicleNumber.trim() : null,
             chassis_number: ownsVehicle ? chassisNumber.trim() : null,
             status: 'new',
-            message: message.trim()
-          });
+            message: message.trim(),
+            admin_notes: metaJson
+          };
+
+          let { error: insertErr } = await supabase.from('driver_applications').insert(fullPayload);
+
           if (insertErr) {
-            Alert.alert('Database Error', JSON.stringify(insertErr));
-            return;
+            // Fallback for strict schemas that don't have vehicle/photo columns yet
+            console.warn("Retrying insert with base schema...", insertErr);
+            const basePayload = {
+              email: email.trim(),
+              full_name: fullName.trim(),
+              phone: phone.trim(),
+              city: city || 'Unknown',
+              licence_number: cdlNumber.trim(),
+              aadhaar_number: aadhaarNumber.trim(),
+              experience_years: parseInt(yearsDriving) || 0,
+              dl_url: documentsUrl || '',
+              owns_vehicle: ownsVehicle,
+              status: 'new',
+              message: message.trim(),
+              admin_notes: metaJson
+            };
+            const retry = await supabase.from('driver_applications').insert(basePayload);
+            if (retry.error) {
+              Alert.alert('Database Error', retry.error.message || JSON.stringify(retry.error));
+              return;
+            }
           }
         } catch (e) {
           console.warn('Could not insert driver application', e);
