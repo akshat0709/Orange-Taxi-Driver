@@ -184,7 +184,10 @@ export function DriverMap({
         ref={mapRef}
         style={styles.map}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
-        customMapStyle={isDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE}
+        customMapStyle={Platform.OS === 'android' ? [] : (isDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE)}
+        loadingEnabled={true}
+        loadingBackgroundColor={isDark ? '#0F172A' : '#F8FAFC'}
+        loadingIndicatorColor="#F97316"
         userInterfaceStyle={isDark ? 'dark' : 'light'}
         initialRegion={{
           latitude: driverCoords.lat || 12.9719,
