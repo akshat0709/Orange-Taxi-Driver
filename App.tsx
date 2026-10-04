@@ -405,20 +405,26 @@ export default function App() {
           );
           
           try {
-            await Location.requestBackgroundPermissionsAsync();
-            await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
-              accuracy: Location.Accuracy.Balanced,
-              timeInterval: 15000,
-              distanceInterval: 20,
-              showsBackgroundLocationIndicator: true,
-              foregroundService: {
-                notificationTitle: 'Orange Chauffeur Active',
-                notificationBody: 'Broadcasting live location for dispatches.',
-                notificationColor: '#F97316',
-              }
-            });
+            // Expo Go on Android completely lacks background location capabilities and throws intrusive warnings.
+            // Only attempt background location tracking in standalone builds or on iOS Simulator.
+            if (Platform.OS === 'android' && __DEV__) {
+               console.log('Skipping background location in Expo Go Android to avoid warnings.');
+            } else {
+              await Location.requestBackgroundPermissionsAsync();
+              await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
+                accuracy: Location.Accuracy.Balanced,
+                timeInterval: 15000,
+                distanceInterval: 20,
+                showsBackgroundLocationIndicator: true,
+                foregroundService: {
+                  notificationTitle: 'Orange Chauffeur Active',
+                  notificationBody: 'Broadcasting live location for dispatches.',
+                  notificationColor: '#F97316',
+                }
+              });
+            }
           } catch (e) {
-            console.log('Background location error in Expo Go, falling back to foreground only', e);
+            console.log('Background location error, falling back to foreground only', e);
           }
         }
 
