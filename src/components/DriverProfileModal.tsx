@@ -135,47 +135,6 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
             </View>
           </View>
 
-          {/* Verified Documents */}
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>CHAUFFEUR CREDENTIALS & PERMITS</Text>
-            <View style={styles.docItem}>
-              <View style={styles.docLeft}>
-                <Text style={styles.docIcon}>🪪</Text>
-                <View>
-                  <Text style={styles.docName}>Commercial Driving License</Text>
-                  <Text style={styles.docExpiry}>Valid through Oct 2029</Text>
-                </View>
-              </View>
-              <Text style={styles.docStatusVerified}>Verified ✓</Text>
-            </View>
-
-            <View style={styles.docDivider} />
-
-            <View style={styles.docItem}>
-              <View style={styles.docLeft}>
-                <Text style={styles.docIcon}>📜</Text>
-                <View>
-                  <Text style={styles.docName}>All India Tourist Vehicle Permit</Text>
-                  <Text style={styles.docExpiry}>Valid through Mar 2028</Text>
-                </View>
-              </View>
-              <Text style={styles.docStatusVerified}>Verified ✓</Text>
-            </View>
-
-            <View style={styles.docDivider} />
-
-            <View style={styles.docItem}>
-              <View style={styles.docLeft}>
-                <Text style={styles.docIcon}>🛡️</Text>
-                <View>
-                  <Text style={styles.docName}>Commercial Fleet Insurance</Text>
-                  <Text style={styles.docExpiry}>Comprehensive Policy (₹10L Passenger Cover)</Text>
-                </View>
-              </View>
-              <Text style={styles.docStatusVerified}>Active ✓</Text>
-            </View>
-          </View>
-
           {/* Chauffeur App Preferences */}
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>DISPATCH & NAVIGATION SETTINGS</Text>
