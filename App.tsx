@@ -971,7 +971,7 @@ export default function App() {
             {/* Online / Offline Switch Pill */}
             <TouchableOpacity
               style={[
-                styles.onlinePill,
+                styles.onlinePill, theme === 'light' && styles.onlinePillLight,
                 isOnline ? styles.onlinePillActive : styles.onlinePillInactive,
               ]}
               onPress={handleToggleOnline}
@@ -1012,12 +1012,12 @@ export default function App() {
 
               {/* Earnings Shortcut - Formatted strictly to 2 decimal places */}
               <TouchableOpacity
-                style={styles.earningsPill}
+                style={[styles.earningsPill, theme === 'light' && styles.earningsPillLight]}
                 onPress={() => setShowEarningsModal(true)}
                 activeOpacity={0.7}
               >
                 <Wallet size={15} color="#F97316" />
-                <Text style={styles.earningsPillText}>₹{formatRupees(stats.todayEarnings)}</Text>
+                <Text style={[styles.earningsPillText, theme === 'light' && styles.textDark]}>₹{formatRupees(stats.todayEarnings)}</Text>
               </TouchableOpacity>
 
               
@@ -1056,24 +1056,24 @@ export default function App() {
             </View>
 
             {/* Quick Metrics Bar - Today's Live Net Earnings formatted to 2 decimals */}
-            <View style={styles.quickMetricsRow}>
+            <View style={[styles.quickMetricsRow, theme === 'light' && styles.quickMetricsRowLight]}>
               <View style={styles.quickMetricCol}>
-                <Text style={styles.quickMetricVal}>₹{formatRupees(stats.todayEarnings)}</Text>
+                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>₹{formatRupees(stats.todayEarnings)}</Text>
                 <Text style={styles.quickMetricLbl}>Today's Net</Text>
               </View>
               <View style={styles.quickMetricDivider} />
               <View style={styles.quickMetricCol}>
-                <Text style={styles.quickMetricVal}>{stats.todayTrips}</Text>
+                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>{stats.todayTrips}</Text>
                 <Text style={styles.quickMetricLbl}>Trips Done</Text>
               </View>
               <View style={styles.quickMetricDivider} />
               <View style={styles.quickMetricCol}>
-                <Text style={styles.quickMetricVal}>{Number(stats.todayHours || 0).toFixed(1)} hrs</Text>
+                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>{Number(stats.todayHours || 0).toFixed(1)} hrs</Text>
                 <Text style={styles.quickMetricLbl}>Online Duty</Text>
               </View>
               <View style={styles.quickMetricDivider} />
               <View style={styles.quickMetricCol}>
-                <Text style={styles.quickMetricVal}>★ {(driver?.rating || 4.94).toFixed(2)}</Text>
+                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>★ {(driver?.rating || 4.94).toFixed(2)}</Text>
                 <Text style={styles.quickMetricLbl}>Chauffeur</Text>
               </View>
             </View>
@@ -1082,7 +1082,7 @@ export default function App() {
 
         {/* Offline Banner when Chauffeur is Offline */}
         {!isOnline && (
-          <View style={styles.offlineBottomCard}>
+          <View style={[styles.offlineBottomCard, theme === 'light' && styles.offlineCardLight]}>
             <View style={styles.offlineIconBox}>
               <Power size={24} color={theme === 'light' ? "#64748B" : "#94A3B8"} />
             </View>
@@ -1483,4 +1483,6 @@ const styles = StyleSheet.create({
   idleBottomCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
   offlineCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
   onlinePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  earningsPillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  quickMetricsRowLight: { backgroundColor: '#F1F5F9' },
 });
