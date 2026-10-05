@@ -204,6 +204,21 @@ export default function App() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
 
+  const [theme, setTheme] = useState<'light'|'dark'>('dark');
+
+  // Load theme on mount
+  useEffect(() => {
+    AsyncStorage.getItem('@orange_driver_theme').then(saved => {
+      if (saved === 'light' || saved === 'dark') setTheme(saved);
+    });
+  }, []);
+
+  const handleToggleTheme = async () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    await AsyncStorage.setItem('@orange_driver_theme', newTheme);
+  };
+
   // Refs
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const locationUpdateTimer = useRef<any>(null);
@@ -926,8 +941,8 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+      <View style={[styles.container, theme === 'light' && { backgroundColor: '#F8FAFC' }]}>
+        <StatusBar barStyle={theme === 'dark' ? "light-content" : "dark-content"} backgroundColor={theme === 'dark' ? "#0F172A" : "#F8FAFC"} />
 
         {/* Fullscreen Map Layer */}
         <DriverMap
@@ -945,7 +960,7 @@ export default function App() {
               : null
           }
           status={activeBooking?.status || (isOnline ? 'idle' : 'offline')}
-          theme="dark"
+          theme={theme}
         />
 
         {/* Top Header Controls Overlay */}
@@ -1092,7 +1107,7 @@ export default function App() {
             onUpdateStatus={handleRideStatusUpdate}
             onFinishRide={handleFinishRide}
             onOpenChat={() => setShowChatModal(true)}
-            theme="dark"
+            theme={theme}
           />
         )}
 
@@ -1111,6 +1126,7 @@ export default function App() {
               lng: driverLocation.longitude,
             }}
             senderRole="driver"
+            theme={theme}
           />
         )}
 
@@ -1119,7 +1135,7 @@ export default function App() {
           booking={incomingBooking}
           onAccept={handleAcceptRide}
           onDecline={handleDeclineRide}
-          theme="dark"
+          theme={theme}
         />
 
         {/* Scheduled Rides Modal */}
@@ -1128,7 +1144,7 @@ export default function App() {
           onClose={() => setShowScheduledModal(false)}
           driverId={driver?.id!}
           onClaimScheduledRide={handleClaimScheduledRide}
-          theme="dark"
+          theme={theme}
         />
 
         {/* Driver Earnings & Payouts Modal */}
@@ -1136,7 +1152,7 @@ export default function App() {
           visible={showEarningsModal}
           onClose={() => setShowEarningsModal(false)}
           driverId={driver?.id!}
-          theme="dark"
+          theme={theme}
         />
 
         {/* Chauffeur Profile & Vehicle Modal */}
@@ -1153,6 +1169,8 @@ export default function App() {
               setDriver(null);
               setShowAuthModal(true);
             }}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
           />
         )}
 
@@ -1165,6 +1183,7 @@ export default function App() {
             setShowAuthModal(false);
             await fetchTodayStats(authenticatedDriver.id);
           }}
+          theme={theme}
         />
 
       </View>

@@ -22,12 +22,15 @@ import { Driver } from '../types';
 interface ChauffeurAuthModalProps {
   visible: boolean;
   onSuccess: (driver: Driver) => void;
+  theme?: 'light' | 'dark';
 }
 
 export function ChauffeurAuthModal({
   visible,
   onSuccess,
+  theme = 'dark',
 }: ChauffeurAuthModalProps) {
+  const isLight = theme === 'light';
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -240,7 +243,7 @@ export function ChauffeurAuthModal({
     <Modal visible={visible} animationType="slide" transparent={false}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
+        style={[styles.container, isLight && styles.containerLight]}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Brand Hero */}
@@ -888,4 +891,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  containerLight: { backgroundColor: '#F8FAFC' },
 });

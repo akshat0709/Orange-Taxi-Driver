@@ -19,6 +19,8 @@ interface DriverProfileModalProps {
   onClose: () => void;
   onLogout: () => void;
   onUpdateDriver?: (updates: Partial<Driver>) => void;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
 }
 
 export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
@@ -27,6 +29,8 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
   onClose,
   onLogout,
   onUpdateDriver,
+  theme,
+  onToggleTheme,
 }) => {
   const [autoAccept, setAutoAccept] = useState(false);
   const [audioAlerts, setAudioAlerts] = useState(true);
@@ -38,15 +42,17 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
     });
   };
 
+  const isLight = theme === 'light';
+
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <View style={styles.container}>
+      <View style={[styles.container, isLight && styles.containerLight]}>
         {/* Top Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
-            <Text style={styles.closeBtnText}>✕</Text>
+        <View style={[styles.header, isLight && styles.headerLight]}>
+          <TouchableOpacity onPress={onClose} style={[styles.closeBtn, isLight && styles.closeBtnLight]} activeOpacity={0.7}>
+            <Text style={[styles.closeBtnText, isLight && styles.textDark]}>✕</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Chauffeur Profile</Text>
+          <Text style={[styles.headerTitle, isLight && styles.textDark]}>Chauffeur Profile</Text>
           <View style={styles.headerBadge}>
             <Text style={styles.headerBadgeText}>PRO</Text>
           </View>
@@ -54,7 +60,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Chauffeur Hero Card */}
-          <View style={styles.heroCard}>
+          <View style={[styles.heroCard, isLight && styles.cardLight]}>
             <View style={styles.avatarRow}>
               <View style={[styles.avatarCircle, { overflow: 'hidden' }]}>
                 {driver.photo_url ? (
@@ -67,7 +73,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
               </View>
               <View style={styles.nameBlock}>
                 <View style={styles.titleRow}>
-                  <Text style={styles.driverName}>{driver.full_name || 'Orange Chauffeur'}</Text>
+                  <Text style={[styles.driverName, isLight && styles.textDark]}>{driver.full_name || 'Orange Chauffeur'}</Text>
                   <View style={styles.verifiedTag}>
                     <Text style={styles.verifiedTagText}>✓ VERIFIED</Text>
                   </View>
@@ -75,7 +81,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
                 <Text style={styles.driverPhone}>{driver.phone || '+91 98765 43210'}</Text>
                 <View style={styles.ratingBadgeRow}>
                   <Text style={styles.ratingStar}>★</Text>
-                  <Text style={styles.ratingNumber}>{(driver.rating || 4.92).toFixed(2)}</Text>
+                  <Text style={[styles.ratingNumber, isLight && styles.textDark]}>{(driver.rating || 4.92).toFixed(2)}</Text>
                   <Text style={styles.tripCountBullet}>•</Text>
                   <Text style={styles.tripCountText}>{driver.total_trips || 1248} trips</Text>
                   <Text style={styles.tierText}>• Gold Chauffeur</Text>
@@ -85,7 +91,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
           </View>
 
           {/* Vehicle Assigned */}
-          <View style={styles.sectionCard}>
+          <View style={[styles.sectionCard, isLight && styles.cardLight]}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>ASSIGNED VEHICLE</Text>
               {driver.vehicle_model && (
@@ -96,19 +102,19 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
             </View>
 
             <View style={styles.vehicleRow}>
-              <View style={styles.vehicleIconBox}>
+              <View style={[styles.vehicleIconBox, isLight && styles.innerBoxLight]}>
                 <Text style={styles.vehicleIcon}>🚘</Text>
               </View>
               <View style={styles.vehicleInfoCol}>
                 {driver.vehicle_model ? (
                   <>
-                    <Text style={styles.vehicleModel}>{driver.vehicle_model}</Text>
+                    <Text style={[styles.vehicleModel, isLight && styles.textDark]}>{driver.vehicle_model}</Text>
                     <Text style={styles.vehiclePlate}>{driver.vehicle_number}</Text>
                     <Text style={styles.vehicleCategory}>{driver.vehicle_type || 'Standard Cab'}</Text>
                   </>
                 ) : (
                   <>
-                    <Text style={styles.vehicleModel}>Pending Assignment</Text>
+                    <Text style={[styles.vehicleModel, isLight && styles.textDark]}>Pending Assignment</Text>
                     <Text style={styles.vehicleCategory}>Admin is reviewing your application</Text>
                   </>
                 )}
@@ -117,31 +123,46 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
           </View>
 
           {/* Performance Metrics */}
-          <View style={styles.sectionCard}>
+          <View style={[styles.sectionCard, isLight && styles.cardLight]}>
             <Text style={styles.sectionTitle}>PERFORMANCE & QUALITY SCORE</Text>
             <View style={styles.metricsRow}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricVal}>97.4%</Text>
+              <View style={[styles.metricCard, isLight && styles.innerBoxLight]}>
+                <Text style={[styles.metricVal, isLight && styles.textDark]}>97.4%</Text>
                 <Text style={styles.metricLbl}>Acceptance Rate</Text>
               </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricVal}>0.8%</Text>
+              <View style={[styles.metricCard, isLight && styles.innerBoxLight]}>
+                <Text style={[styles.metricVal, isLight && styles.textDark]}>0.8%</Text>
                 <Text style={styles.metricLbl}>Cancellation</Text>
               </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricVal}>99.1%</Text>
+              <View style={[styles.metricCard, isLight && styles.innerBoxLight]}>
+                <Text style={[styles.metricVal, isLight && styles.textDark]}>99.1%</Text>
                 <Text style={styles.metricLbl}>On-Time Arrival</Text>
               </View>
             </View>
           </View>
 
           {/* Chauffeur App Preferences */}
-          <View style={styles.sectionCard}>
+          <View style={[styles.sectionCard, isLight && styles.cardLight]}>
             <Text style={styles.sectionTitle}>DISPATCH & NAVIGATION SETTINGS</Text>
 
             <View style={styles.prefRow}>
               <View style={styles.prefTextCol}>
-                <Text style={styles.prefTitle}>Auto-Accept Nearby Dispatches</Text>
+                <Text style={[styles.prefTitle, isLight && styles.textDark]}>App Theme (Dark / Light)</Text>
+                <Text style={styles.prefSubtitle}>Switch between dark and light modes</Text>
+              </View>
+              <Switch
+                value={isLight}
+                onValueChange={onToggleTheme}
+                trackColor={{ false: '#334155', true: '#F97316' }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+
+            <View style={[styles.docDivider, isLight && styles.dividerLight]} />
+
+            <View style={styles.prefRow}>
+              <View style={styles.prefTextCol}>
+                <Text style={[styles.prefTitle, isLight && styles.textDark]}>Auto-Accept Nearby Dispatches</Text>
                 <Text style={styles.prefSubtitle}>Instantly lock trips within 3 km pickup radius</Text>
               </View>
               <Switch
@@ -152,11 +173,11 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
               />
             </View>
 
-            <View style={styles.docDivider} />
+            <View style={[styles.docDivider, isLight && styles.dividerLight]} />
 
             <View style={styles.prefRow}>
               <View style={styles.prefTextCol}>
-                <Text style={styles.prefTitle}>High-Volume Dispatch Audio Chimes</Text>
+                <Text style={[styles.prefTitle, isLight && styles.textDark]}>High-Volume Dispatch Audio Chimes</Text>
                 <Text style={styles.prefSubtitle}>Loud pulse sound on new booking broadcast</Text>
               </View>
               <Switch
@@ -167,7 +188,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
               />
             </View>
 
-            <View style={styles.docDivider} />
+            <View style={[styles.docDivider, isLight && styles.dividerLight]} />
 
             <View style={styles.navRow}>
               <Text style={styles.prefTitle}>Default Navigation App</Text>
@@ -613,4 +634,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
   },
+  containerLight: { backgroundColor: '#F8FAFC' },
+  headerLight: { backgroundColor: '#FFFFFF', borderBottomColor: '#E2E8F0' },
+  cardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
+  innerBoxLight: { backgroundColor: '#F1F5F9' },
+  textDark: { color: '#0F172A' },
+  closeBtnLight: { backgroundColor: '#E2E8F0' },
+  dividerLight: { backgroundColor: '#E2E8F0' },
 });

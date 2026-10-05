@@ -59,6 +59,7 @@ interface InRideChatModalProps {
   driverLocation?: { lat: number; lng: number } | null;
   onUnreadCountChange?: (count: number) => void;
   senderRole?: 'customer' | 'driver';
+  theme?: 'light' | 'dark';
 }
 
 const DRIVER_QUICK_CHIPS = [
@@ -190,7 +191,9 @@ export function InRideChatModal({
   driverLocation,
   onUnreadCountChange,
   senderRole = 'driver',
+  theme = 'dark',
 }: InRideChatModalProps) {
+  const isLight = theme === 'light';
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [sharingGps, setSharingGps] = useState(false);
@@ -558,7 +561,7 @@ export function InRideChatModal({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalOverlay}
       >
-        <View style={styles.modalContainer}>
+        <View style={[styles.modalContainer, isLight && styles.containerLight]}>
           {/* Header */}
           <View style={styles.header}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
@@ -1198,4 +1201,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#232B3B',
     opacity: 0.5,
   },
+  containerLight: { backgroundColor: '#F8FAFC' },
 });
