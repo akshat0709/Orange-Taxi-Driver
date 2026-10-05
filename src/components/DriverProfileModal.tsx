@@ -36,15 +36,9 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
   const [navApp, setNavApp] = useState<'google' | 'apple'>('google');
 
   const handleCallSupport = () => {
-    Linking.openURL('tel:+917294073222').catch(() => {
+    Linking.openURL('tel:+9118001234567').catch(() => {
       Alert.alert('Chauffeur Support', 'Toll-free helpline: 1800-123-4567\nActive 24/7 for Orange Taxi Chauffeurs.');
-    
-  navBtnLight: { backgroundColor: '#FFFFFF', borderColor: '#CBD5E1' },
-  navBtnActiveLight: { backgroundColor: '#F97316', borderColor: '#EA580C' },
-  navBtnTextLight: { color: '#64748B' },
-  navBtnTextActiveLight: { color: '#FFFFFF' },
-  supportBtnLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
-});
+    });
   };
 
   const isLight = theme === 'light';
@@ -633,7 +627,6 @@ const styles = StyleSheet.create({
   textDark: { color: '#0F172A' },
   closeBtnLight: { backgroundColor: '#E2E8F0' },
   dividerLight: { backgroundColor: '#E2E8F0' },
-
   navBtnLight: { backgroundColor: '#FFFFFF', borderColor: '#CBD5E1' },
   navBtnActiveLight: { backgroundColor: '#F97316', borderColor: '#EA580C' },
   navBtnTextLight: { color: '#64748B' },
