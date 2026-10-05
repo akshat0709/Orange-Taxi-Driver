@@ -32,7 +32,6 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
   theme,
   onToggleTheme,
 }) => {
-  const [autoAccept, setAutoAccept] = useState(false);
   const [audioAlerts, setAudioAlerts] = useState(true);
   const [navApp, setNavApp] = useState<'google' | 'apple'>('google');
 
@@ -160,20 +159,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
 
             <View style={[styles.docDivider, isLight && styles.dividerLight]} />
 
-            <View style={styles.prefRow}>
-              <View style={styles.prefTextCol}>
-                <Text style={[styles.prefTitle, isLight && styles.textDark]}>Auto-Accept Nearby Dispatches</Text>
-                <Text style={styles.prefSubtitle}>Instantly lock trips within 3 km pickup radius</Text>
-              </View>
-              <Switch
-                value={autoAccept}
-                onValueChange={setAutoAccept}
-                trackColor={{ false: '#334155', true: '#F97316' }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
 
-            <View style={[styles.docDivider, isLight && styles.dividerLight]} />
 
             <View style={styles.prefRow}>
               <View style={styles.prefTextCol}>
