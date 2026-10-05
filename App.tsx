@@ -160,6 +160,16 @@ async function registerForPushNotificationsAsync() {
   return token;
 }
 
+function getDistanceInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+}
+
 export default function App() {
   // Authentication & Driver state
   const [driver, setDriver] = useState<Driver | null>(null);
@@ -615,17 +625,32 @@ export default function App() {
           .is('driver_id', null)
           .gte('created_at', fiveMinutesAgo)
           .order('created_at', { ascending: false })
-          .limit(1);
+          .limit(20);
 
         if (!error && searchingBookings && searchingBookings.length > 0) {
-          const candidate = searchingBookings[0] as Booking;
-          if (
-            candidate &&
-            !declinedBookingIds.includes(candidate.id) &&
-            !activeBooking &&
-            !incomingBooking
-          ) {
-            await triggerIncomingBookingAlert(candidate);
+          const now = Date.now();
+          const declinesStr = await AsyncStorage.getItem("orange_declines");
+          const declines = declinesStr ? JSON.parse(declinesStr) : {};
+
+          for (const cand of searchingBookings) {
+            const candidate = cand as Booking;
+            // 5km check
+            if (driver.current_lat && driver.current_lng && candidate.pickup_lat && candidate.pickup_lng) {
+              const d = getDistanceInKm(driver.current_lat, driver.current_lng, candidate.pickup_lat, candidate.pickup_lng);
+              if (d > 5) continue;
+            }
+
+            // Decline check
+            const dec = declines[candidate.id];
+            if (dec) {
+              if (dec.count >= 2) continue;
+              if (dec.count === 1 && (now - dec.lastDeclinedAt < 30000)) continue;
+            }
+
+            if (!activeBooking && !incomingBooking) {
+              await triggerIncomingBookingAlert(candidate);
+              break;
+            }
           }
         }
       } catch (err) {
@@ -657,11 +682,29 @@ export default function App() {
           if (
             newBooking.status === 'searching' &&
             !newBooking.driver_id &&
-            !declinedBookingIds.includes(newBooking.id) &&
             !activeBooking &&
             !incomingBooking
           ) {
-            await triggerIncomingBookingAlert(newBooking);
+            let skip = false;
+            if (driver.current_lat && driver.current_lng && newBooking.pickup_lat && newBooking.pickup_lng) {
+              const d = getDistanceInKm(driver.current_lat, driver.current_lng, newBooking.pickup_lat, newBooking.pickup_lng);
+              if (d > 5) skip = true;
+            }
+            if (!skip) {
+              try {
+                const decsStr = await AsyncStorage.getItem("orange_declines");
+                const decs = decsStr ? JSON.parse(decsStr) : {};
+                const dec = decs[newBooking.id];
+                const now = Date.now();
+                if (dec) {
+                  if (dec.count >= 2) skip = true;
+                  else if (dec.count === 1 && (now - dec.lastDeclinedAt < 30000)) skip = true;
+                }
+              } catch (e) {}
+            }
+            if (!skip && !declinedBookingIds.includes(newBooking.id)) {
+              await triggerIncomingBookingAlert(newBooking);
+            }
           }
 
           // If active or incoming booking is cancelled by rider

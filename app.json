@@ -37,6 +37,12 @@
         "backgroundColor": "#0B0D11",
         "foregroundImage": "./assets/android-icon-foreground.png"
       }
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f61f3894-24b0-4bf5-ae80-538889ef46c5"
+      }
+    },
+    "owner": "akshat0709"
   }
 }
