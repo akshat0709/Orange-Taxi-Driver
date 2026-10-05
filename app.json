@@ -18,7 +18,6 @@
         ]
       },
       "config": {
-        "googleMapsApiKey": "AIzaSyD-IOH9cMppWtKjw_zn-m7XOE3ut62HVX8"
       }
     },
     "android": {
@@ -31,9 +30,6 @@
         "FOREGROUND_SERVICE_LOCATION"
       ],
       "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyD-IOH9cMppWtKjw_zn-m7XOE3ut62HVX8"
-        }
       },
       "adaptiveIcon": {
         "backgroundColor": "#0B0D11",
