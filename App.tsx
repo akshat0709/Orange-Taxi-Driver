@@ -839,6 +839,18 @@ export default function App() {
     } catch {}
     await soundService.stopDispatchAlert();
     setDeclinedBookingIds((prev) => [...prev, booking.id]);
+    
+    try {
+      const decsStr = await AsyncStorage.getItem("orange_declines");
+      const decs = decsStr ? JSON.parse(decsStr) : {};
+      const count = decs[booking.id]?.count || 0;
+      decs[booking.id] = {
+        count: count + 1,
+        lastDeclinedAt: Date.now()
+      };
+      await AsyncStorage.setItem("orange_declines", JSON.stringify(decs));
+    } catch(e) {}
+
     setIncomingBooking(null);
   };
 
