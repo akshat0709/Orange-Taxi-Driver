@@ -36,7 +36,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
   const [navApp, setNavApp] = useState<'google' | 'apple'>('google');
 
   const handleCallSupport = () => {
-    Linking.openURL('tel:+9118001234567').catch(() => {
+    Linking.openURL('tel:+917294073222').catch(() => {
       Alert.alert('Chauffeur Support', 'Toll-free helpline: 1800-123-4567\nActive 24/7 for Orange Taxi Chauffeurs.');
     
   navBtnLight: { backgroundColor: '#FFFFFF', borderColor: '#CBD5E1' },
