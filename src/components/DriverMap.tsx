@@ -183,7 +183,7 @@ export function DriverMap({
       <MapView
         ref={mapRef}
         style={styles.map}
-        provider={PROVIDER_GOOGLE}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
         customMapStyle={isDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE}
         
         userInterfaceStyle={isDark ? 'dark' : 'light'}
