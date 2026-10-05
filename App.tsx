@@ -72,7 +72,13 @@ if (Constants.appOwnership !== 'expo') {
       shouldShowBanner: true,
       shouldShowList: true,
     }),
-  });
+  
+  textDark: { color: '#0F172A' },
+  headerIconBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
+  idleBottomCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  offlineCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  onlinePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+});
 }
 
 const BACKGROUND_LOCATION_TASK = 'BACKGROUND_LOCATION_TASK';
@@ -102,6 +108,12 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
       }
     }
   }
+
+  textDark: { color: '#0F172A' },
+  headerIconBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
+  idleBottomCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  offlineCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  onlinePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
 });
 
 
@@ -129,7 +141,13 @@ async function registerForPushNotificationsAsync() {
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#EA580C',
-    });
+    
+  textDark: { color: '#0F172A' },
+  headerIconBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
+  idleBottomCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  offlineCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  onlinePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+});
   }
   if (Device.isDevice) {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -187,7 +205,13 @@ export default function App() {
     latitude: 12.9716,
     longitude: 77.5946,
     heading: 45,
-  });
+  
+  textDark: { color: '#0F172A' },
+  headerIconBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
+  idleBottomCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  offlineCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  onlinePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+});
 
   // Ride Management
   const [incomingBooking, setIncomingBooking] = useState<Booking | null>(null);
@@ -210,7 +234,13 @@ export default function App() {
   useEffect(() => {
     AsyncStorage.getItem('@orange_driver_theme').then(saved => {
       if (saved === 'light' || saved === 'dark') setTheme(saved);
-    });
+    
+  textDark: { color: '#0F172A' },
+  headerIconBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
+  idleBottomCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  offlineCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  onlinePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+});
   }, []);
 
   const handleToggleTheme = async () => {
@@ -322,7 +352,13 @@ export default function App() {
         setActiveBooking(null);
         setShowAuthModal(true);
       }
-    });
+    
+  textDark: { color: '#0F172A' },
+  headerIconBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
+  idleBottomCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  offlineCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  onlinePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+});
 
     return () => {
       subscription.unsubscribe();
@@ -471,7 +507,13 @@ export default function App() {
             { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 5 },
             async (loc) => {
               if (loc?.coords) {
-                setDriverLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+                setDriverLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude 
+  textDark: { color: '#0F172A' },
+  headerIconBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
+  idleBottomCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  offlineCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  onlinePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+});
                 try {
                   const saved = await AsyncStorage.getItem('orange_taxi_driver');
                   if (saved) {
@@ -504,7 +546,13 @@ export default function App() {
                   notificationBody: 'Broadcasting live location for dispatches.',
                   notificationColor: '#F97316',
                 }
-              });
+              
+  textDark: { color: '#0F172A' },
+  headerIconBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
+  idleBottomCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  offlineCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  onlinePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+});
             }
           } catch (e) {
             console.log('Background location error, falling back to foreground only', e);
@@ -514,14 +562,26 @@ export default function App() {
 
         const initial = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
-        });
+        
+  textDark: { color: '#0F172A' },
+  headerIconBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
+  idleBottomCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  offlineCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  onlinePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+});
 
         if (isMounted && initial?.coords) {
           setDriverLocation({
             latitude: initial.coords.latitude,
             longitude: initial.coords.longitude,
             heading: initial.coords.heading || 0,
-          });
+          
+  textDark: { color: '#0F172A' },
+  headerIconBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
+  idleBottomCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  offlineCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  onlinePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+});
         }
 
         locationSubscription.current = await Location.watchPositionAsync(
@@ -536,7 +596,13 @@ export default function App() {
               latitude: loc.coords.latitude,
               longitude: loc.coords.longitude,
               heading: loc.coords.heading || 0,
-            });
+            
+  textDark: { color: '#0F172A' },
+  headerIconBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
+  idleBottomCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  offlineCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  onlinePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+});
           }
         );
       } catch (err) {
@@ -996,11 +1062,11 @@ export default function App() {
             <View style={styles.headerRightGroup}>
               {/* Scheduled Rides */}
               <TouchableOpacity
-                style={styles.headerIconBtn}
+                style={[styles.headerIconBtn, isLight && styles.headerIconBtnLight]}
                 onPress={() => setShowScheduledModal(true)}
                 activeOpacity={0.7}
               >
-                <Calendar size={18} color="#F8FAFC" />
+                <Calendar size={18} color={isLight ? "#0F172A" : "#F8FAFC"} />
                 {claimedScheduledRides.length > 0 && (
                   <View style={styles.badgeIndicator}>
                     <Text style={styles.badgeIndicatorText}>{claimedScheduledRides.length}</Text>
@@ -1040,13 +1106,13 @@ export default function App() {
 
         {/* Idle Floating Bar when Online & No Active Trip */}
         {isOnline && !activeBooking && (
-          <View style={styles.idleBottomCard}>
+          <View style={[styles.idleBottomCard, isLight && styles.idleBottomCardLight]}>
             <View style={styles.radarPulseRow}>
               <View style={styles.radarRadarBox}>
                 <Radio size={20} color="#F97316" />
               </View>
               <View style={styles.idleStatusTextCol}>
-                <Text style={styles.idleStatusTitle}>Searching for Premium Dispatches</Text>
+                <Text style={[styles.idleStatusTitle, isLight && styles.textDark]}>Searching for Premium Dispatches</Text>
                 <Text style={styles.idleStatusSubtitle}>
                   Connected to Supabase • Realtime Fleet Dispatch Active
                 </Text>
@@ -1082,10 +1148,10 @@ export default function App() {
         {!isOnline && (
           <View style={styles.offlineBottomCard}>
             <View style={styles.offlineIconBox}>
-              <Power size={24} color="#94A3B8" />
+              <Power size={24} color={isLight ? "#64748B" : "#94A3B8"} />
             </View>
             <View style={styles.offlineTextCol}>
-              <Text style={styles.offlineCardTitle}>You are currently Offline</Text>
+              <Text style={[styles.offlineCardTitle, isLight && styles.textDark]}>You are currently Offline</Text>
               <Text style={styles.offlineCardSubtitle}>
                 Go online to start receiving executive dispatches and airport runs
               </Text>
@@ -1476,4 +1542,10 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.8,
   },
+
+  textDark: { color: '#0F172A' },
+  headerIconBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
+  idleBottomCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  offlineCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
+  onlinePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
 });

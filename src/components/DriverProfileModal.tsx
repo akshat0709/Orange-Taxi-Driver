@@ -38,7 +38,13 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
   const handleCallSupport = () => {
     Linking.openURL('tel:+9118001234567').catch(() => {
       Alert.alert('Chauffeur Support', 'Toll-free helpline: 1800-123-4567\nActive 24/7 for Orange Taxi Chauffeurs.');
-    });
+    
+  navBtnLight: { backgroundColor: '#FFFFFF', borderColor: '#CBD5E1' },
+  navBtnActiveLight: { backgroundColor: '#F97316', borderColor: '#EA580C' },
+  navBtnTextLight: { color: '#64748B' },
+  navBtnTextActiveLight: { color: '#FFFFFF' },
+  supportBtnLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
+});
   };
 
   const isLight = theme === 'light';
@@ -177,21 +183,21 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
             <View style={[styles.docDivider, isLight && styles.dividerLight]} />
 
             <View style={styles.navRow}>
-              <Text style={styles.prefTitle}>Default Navigation App</Text>
+              <Text style={[styles.prefTitle, isLight && styles.textDark]}>Default Navigation App</Text>
               <View style={styles.navToggleRow}>
                 <TouchableOpacity
-                  style={[styles.navBtn, navApp === 'google' && styles.navBtnActive]}
+                  style={[styles.navBtn, isLight && styles.navBtnLight, navApp === 'google' && styles.navBtnActive, isLight && styles.navBtnActiveLight]}
                   onPress={() => setNavApp('google')}
                 >
-                  <Text style={[styles.navBtnText, navApp === 'google' && styles.navBtnTextActive]}>
+                  <Text style={[styles.navBtnText, isLight && styles.navBtnTextLight, navApp === 'google' && styles.navBtnTextActive, isLight && styles.navBtnTextActiveLight]}>
                     Google Maps
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.navBtn, navApp === 'apple' && styles.navBtnActive]}
+                  style={[styles.navBtn, isLight && styles.navBtnLight, navApp === 'apple' && styles.navBtnActive, isLight && styles.navBtnActiveLight]}
                   onPress={() => setNavApp('apple')}
                 >
-                  <Text style={[styles.navBtnText, navApp === 'apple' && styles.navBtnTextActive]}>
+                  <Text style={[styles.navBtnText, isLight && styles.navBtnTextLight, navApp === 'apple' && styles.navBtnTextActive, isLight && styles.navBtnTextActiveLight]}>
                     Apple Maps
                   </Text>
                 </TouchableOpacity>
@@ -200,10 +206,10 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
           </View>
 
           {/* Support Hotline CTA */}
-          <TouchableOpacity style={styles.supportBtn} onPress={handleCallSupport} activeOpacity={0.8}>
+          <TouchableOpacity style={[styles.supportBtn, isLight && styles.supportBtnLight]} onPress={handleCallSupport} activeOpacity={0.8}>
             <Text style={styles.supportBtnIcon}>📞</Text>
             <View style={styles.supportTextCol}>
-              <Text style={styles.supportBtnTitle}>24/7 Chauffeur Dispatch Helpdesk</Text>
+              <Text style={[styles.supportBtnTitle, isLight && styles.textDark]}>24/7 Chauffeur Dispatch Helpdesk</Text>
               <Text style={styles.supportBtnSubtitle}>Emergency assistance, route deviation & customer issues</Text>
             </View>
           </TouchableOpacity>
@@ -627,4 +633,10 @@ const styles = StyleSheet.create({
   textDark: { color: '#0F172A' },
   closeBtnLight: { backgroundColor: '#E2E8F0' },
   dividerLight: { backgroundColor: '#E2E8F0' },
+
+  navBtnLight: { backgroundColor: '#FFFFFF', borderColor: '#CBD5E1' },
+  navBtnActiveLight: { backgroundColor: '#F97316', borderColor: '#EA580C' },
+  navBtnTextLight: { color: '#64748B' },
+  navBtnTextActiveLight: { color: '#FFFFFF' },
+  supportBtnLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
 });
