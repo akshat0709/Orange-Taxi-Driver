@@ -645,7 +645,10 @@ export default function App() {
         if (!error && searchingBookings && searchingBookings.length > 0) {
           const now = Date.now();
           const declinesStr = await AsyncStorage.getItem("orange_declines");
-          const declines = declinesStr ? JSON.parse(declinesStr) : {};
+          let declines: Record<string, any> = {};
+          try {
+            if (declinesStr) declines = JSON.parse(declinesStr);
+          } catch(e) {}
 
           for (const cand of searchingBookings) {
             const candidate = cand as Booking;

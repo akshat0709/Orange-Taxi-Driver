@@ -1,13 +1,22 @@
-import { Audio } from 'expo-av';
 import { Platform } from 'react-native';
 
 class SoundService {
-  private dispatchSound: Audio.Sound | null = null;
-  private acceptSound: Audio.Sound | null = null;
+  private dispatchSound: any = null;
+  private acceptSound: any = null;
   private isPlayingDispatchAlert = false;
+
+  private getAudioModule() {
+    try {
+      return require('expo-av').Audio;
+    } catch (e) {
+      return null;
+    }
+  }
 
   async configureAudioMode() {
     try {
+      const Audio = this.getAudioModule();
+      if (!Audio) return;
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
@@ -30,6 +39,11 @@ class SoundService {
         this.dispatchSound = null;
       }
       
+      const Audio = this.getAudioModule();
+      if (!Audio) {
+        console.log('[SoundService] Audio module missing, falling back to silent');
+        return;
+      }
       const { sound } = await Audio.Sound.createAsync(
         require('../../assets/dispatch_alert.wav'),
         { isLooping: true, volume: 1.0 }
@@ -70,8 +84,9 @@ class SoundService {
         this.acceptSound = null;
       }
       
-      // We don't have an accept_alert.wav, so we just use the dispatch alert but without looping for a single ding,
-      // or we can just skip it if it's not strictly needed. I'll play the dispatch alert once quickly.
+      const Audio = this.getAudioModule();
+      if (!Audio) return;
+      
       const { sound } = await Audio.Sound.createAsync(
         require('../../assets/dispatch_alert.wav'),
         { isLooping: false, volume: 0.5 }
