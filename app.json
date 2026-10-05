@@ -17,9 +17,7 @@
           "location"
         ]
       },
-      "config": {
-        "googleMapsApiKey": "AIzaSyD-IOH9cMppWtKjw_zn-m7XOE3ut62HVX8"
-      }
+      "config": {}
     },
     "android": {
       "package": "com.orangetaxi.driver",
