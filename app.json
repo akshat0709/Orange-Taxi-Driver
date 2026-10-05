@@ -43,6 +43,18 @@
         "projectId": "f61f3894-24b0-4bf5-ae80-538889ef46c5"
       }
     },
-    "owner": "akshat0709"
+    "owner": "akshat0709",
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Orange Driver to use your location for dispatch and tracking.",
+          "locationAlwaysPermission": "Allow Orange Driver to use your location for dispatch and tracking.",
+          "locationWhenInUsePermission": "Allow Orange Driver to use your location for dispatch and tracking.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ]
+    ]
   }
 }
