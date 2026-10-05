@@ -309,30 +309,87 @@ export default function App() {
     try {
       let driverProfile: Driver | null = null;
 
-      // Query drivers table
+      // Primary: look up by user_id
       const { data: driverRow } = await supabase
         .from('drivers')
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (driverRow) {
+      // Fallback: driver was approved before user_id was stored — match by email or phone
+      let resolvedRow = driverRow;
+      if (!resolvedRow) {
+        const userEmail = user.email || '';
+        const userPhone = user.phone || user.user_metadata?.phone || '';
+
+        // Try match by email via profiles table first
+        if (userEmail) {
+          const { data: byEmail } = await supabase
+            .from('drivers')
+            .select('*')
+            .ilike('phone', userPhone ? userPhone.replace(/\D/g, '') + '%' : '')
+            .maybeSingle();
+          // Also try joining through profiles
+          const { data: profileRow } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('email', userEmail)
+            .maybeSingle();
+          if (profileRow) {
+            const { data: byProfileId } = await supabase
+              .from('drivers')
+              .select('*')
+              .eq('user_id', profileRow.id)
+              .maybeSingle();
+            if (byProfileId) resolvedRow = byProfileId;
+          }
+        }
+
+        // Try match by phone number digits
+        if (!resolvedRow && userPhone) {
+          const digits = userPhone.replace(/\D/g, '');
+          const { data: allDrivers } = await supabase
+            .from('drivers')
+            .select('*')
+            .limit(200);
+          if (allDrivers) {
+            resolvedRow = allDrivers.find((d: any) =>
+              d.phone && d.phone.replace(/\D/g, '').endsWith(digits.slice(-10))
+            ) || null;
+          }
+        }
+
+        // Self-heal: write user_id back so next login works instantly
+        if (resolvedRow && !resolvedRow.user_id) {
+          await supabase
+            .from('drivers')
+            .update({ user_id: user.id })
+            .eq('id', resolvedRow.id);
+          resolvedRow.user_id = user.id;
+        }
+      }
+
+      const driverRowFinal = resolvedRow;
+
+      if (driverRowFinal) {
         driverProfile = {
-          id: driverRow.id,
+          id: driverRowFinal.id,
           user_id: user.id,
-          full_name: driverRow.full_name || 'Orange Chauffeur',
-          phone: driverRow.phone || user.phone || '',
-          city: driverRow.city || 'Bengaluru',
-          vehicle_model: driverRow.vehicle_model || 'No Vehicle Assigned',
-          vehicle_number: driverRow.vehicle_number || '',
-          vehicle_type: driverRow.vehicle_type || '',
-          is_online: driverRow.is_online ?? true,
-          current_lat: driverRow.current_lat || 12.9716,
-          current_lng: driverRow.current_lng || 77.5946,
-          rating: driverRow.rating || 0,
-          total_rides: driverRow.total_rides || 0,
-          total_trips: driverRow.total_rides || 0,
-          status: driverRow.status || 'active',
+          full_name: driverRowFinal.full_name || 'Orange Chauffeur',
+          phone: driverRowFinal.phone || user.phone || '',
+          city: driverRowFinal.city || 'Bengaluru',
+          vehicle_model: driverRowFinal.vehicle_model || 'No Vehicle Assigned',
+          vehicle_number: driverRowFinal.vehicle_number || '',
+          vehicle_type: driverRowFinal.vehicle_type || '',
+          is_online: driverRowFinal.is_online ?? true,
+          current_lat: driverRowFinal.current_lat || 12.9716,
+          current_lng: driverRowFinal.current_lng || 77.5946,
+          rating: driverRowFinal.rating || 0,
+          total_rides: driverRowFinal.total_rides || 0,
+          total_trips: driverRowFinal.total_rides || 0,
+          status: driverRowFinal.status || 'active',
+          photo_url: driverRowFinal.photo_url || undefined,
+          dl_url: driverRowFinal.dl_url || undefined,
         };
       } else {
         setIsPendingApproval(true);
