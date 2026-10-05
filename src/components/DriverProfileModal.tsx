@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Image,
   Switch,
   Linking,
   Alert,
@@ -55,10 +56,14 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
           {/* Chauffeur Hero Card */}
           <View style={styles.heroCard}>
             <View style={styles.avatarRow}>
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarInitial}>
-                  {driver.full_name ? driver.full_name.charAt(0).toUpperCase() : 'D'}
-                </Text>
+              <View style={[styles.avatarCircle, { overflow: 'hidden' }]}>
+                {driver.photo_url ? (
+                  <Image source={{ uri: driver.photo_url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                ) : (
+                  <Text style={styles.avatarInitial}>
+                    {driver.full_name ? driver.full_name.charAt(0).toUpperCase() : 'D'}
+                  </Text>
+                )}
               </View>
               <View style={styles.nameBlock}>
                 <View style={styles.titleRow}>
@@ -82,10 +87,12 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
           {/* Vehicle Assigned */}
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>ASSIGNED EV FLEET</Text>
-              <View style={styles.evBadge}>
-                <Text style={styles.evBadgeText}>⚡ 100% ELECTRIC</Text>
-              </View>
+              <Text style={styles.sectionTitle}>ASSIGNED VEHICLE</Text>
+              {driver.vehicle_model && (
+                <View style={styles.evBadge}>
+                  <Text style={styles.evBadgeText}>✓ VERIFIED</Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.vehicleRow}>
@@ -93,26 +100,18 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
                 <Text style={styles.vehicleIcon}>🚘</Text>
               </View>
               <View style={styles.vehicleInfoCol}>
-                <Text style={styles.vehicleModel}>{driver.vehicle_model || 'Mahindra BE 6 EV'}</Text>
-                <Text style={styles.vehiclePlate}>{driver.vehicle_number || 'DL 01 AB 1234'}</Text>
-                <Text style={styles.vehicleCategory}>{driver.vehicle_type || 'Premium SUV'} • Silent Chauffeur Mode</Text>
-              </View>
-            </View>
-
-            <View style={styles.evMetricsGrid}>
-              <View style={styles.evMetricCell}>
-                <Text style={styles.evMetricValue}>82%</Text>
-                <Text style={styles.evMetricLabel}>Est. Battery</Text>
-              </View>
-              <View style={styles.evMetricDivider} />
-              <View style={styles.evMetricCell}>
-                <Text style={styles.evMetricValue}>340 km</Text>
-                <Text style={styles.evMetricLabel}>Drive Range</Text>
-              </View>
-              <View style={styles.evMetricDivider} />
-              <View style={styles.evMetricCell}>
-                <Text style={styles.evMetricValue}>Fastag ✓</Text>
-                <Text style={styles.evMetricLabel}>Airport Pass</Text>
+                {driver.vehicle_model ? (
+                  <>
+                    <Text style={styles.vehicleModel}>{driver.vehicle_model}</Text>
+                    <Text style={styles.vehiclePlate}>{driver.vehicle_number}</Text>
+                    <Text style={styles.vehicleCategory}>{driver.vehicle_type || 'Standard Cab'}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.vehicleModel}>Pending Assignment</Text>
+                    <Text style={styles.vehicleCategory}>Admin is reviewing your application</Text>
+                  </>
+                )}
               </View>
             </View>
           </View>

@@ -4,6 +4,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Image,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
@@ -906,13 +907,17 @@ export default function App() {
 
               {/* Profile Avatar */}
               <TouchableOpacity
-                style={styles.profileAvatarBtn}
+                style={[styles.profileAvatarBtn, { overflow: 'hidden' }]}
                 onPress={() => setShowProfileModal(true)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.avatarLetter}>
-                  {driver?.full_name ? driver.full_name.charAt(0).toUpperCase() : 'R'}
-                </Text>
+                {driver?.photo_url ? (
+                  <Image source={{ uri: driver.photo_url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                ) : (
+                  <Text style={styles.avatarLetter}>
+                    {driver?.full_name ? driver.full_name.charAt(0).toUpperCase() : 'R'}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
