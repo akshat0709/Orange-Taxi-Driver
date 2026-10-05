@@ -3,6 +3,7 @@ export interface Driver {
   user_id: string | null;
   full_name: string;
   photo_url?: string;
+  dl_url?: string;
   phone: string;
   city?: string;
   vehicle_model: string;
