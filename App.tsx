@@ -22,12 +22,7 @@ import * as Haptics from 'expo-haptics';
 import * as Device from 'expo-device';
 
 import Constants from 'expo-constants';
-let Notifications: any;
-try {
-  if (Constants.appOwnership !== 'expo') {
-    Notifications = require('expo-notifications');
-  }
-} catch(e) {}
+
 
 
 import {
@@ -63,17 +58,7 @@ import { resolveBookingTargetCoords } from './src/lib/locationResolver';
 import * as TaskManager from 'expo-task-manager';
 
 
-if (Constants.appOwnership !== 'expo') {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
-}
+
 
 const BACKGROUND_LOCATION_TASK = 'BACKGROUND_LOCATION_TASK';
 
