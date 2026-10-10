@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Modal,
   View,
@@ -38,6 +39,22 @@ export function ChauffeurAuthModal({
   const [phone, setPhone] = useState('');
   const [cdlNumber, setCdlNumber] = useState('');
   const [aadhaarNumber, setAadhaarNumber] = useState('');
+
+const handleAadhaarChange = (text: string) => {
+    // Only allow numbers
+    const cleaned = text.replace(/\D/g, '');
+    let masked = cleaned;
+    
+    // Mask first 8 digits as they are typed
+    if (cleaned.length > 8) {
+      masked = 'XXXX-XXXX-' + cleaned.substring(8, 12);
+    } else if (cleaned.length > 4) {
+      masked = 'XXXX-' + cleaned.substring(4, 8);
+    }
+    
+    setAadhaarNumber(masked);
+};
+
   const [yearsDriving, setYearsDriving] = useState('');
   const [city, setCity] = useState('Bengaluru');
   const [loading, setLoading] = useState(false);
@@ -83,6 +100,24 @@ export function ChauffeurAuthModal({
     }
   };
 
+  // Forgot Password
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      Alert.alert('Email Required', 'Please enter your email to reset your password.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+      if (error) throw error;
+      Alert.alert('Reset Email Sent', 'Please check your email inbox for password reset instructions.');
+    } catch (e: any) {
+      Alert.alert('Reset Failed', e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Standard Email/Password Sign In
   const handleSignIn = async () => {
     if (!email.trim() || !password.trim()) {
@@ -93,12 +128,37 @@ export function ChauffeurAuthModal({
     setLoading(true);
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      const storedLockout = await AsyncStorage.getItem('@orange_driver_lockout');
+      if (storedLockout && parseInt(storedLockout) > Date.now()) {
+        const remaining = Math.ceil((parseInt(storedLockout) - Date.now()) / 60000);
+        Alert.alert('Account Locked', `Too many failed attempts. Please try again in ${remaining} minutes.`);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password.trim(),
       });
 
-      if (error) throw error;
+      if (error) {
+        const storedAttempts = await AsyncStorage.getItem('@orange_driver_attempts');
+        let attempts = storedAttempts ? parseInt(storedAttempts) : 0;
+        attempts++;
+        if (attempts >= 5) {
+          await AsyncStorage.setItem('@orange_driver_lockout', (Date.now() + 15 * 60 * 1000).toString());
+          await AsyncStorage.setItem('@orange_driver_attempts', '0');
+          Alert.alert('Account Locked', '5 unsuccessful attempts. Locked for 15 minutes.');
+        } else {
+          await AsyncStorage.setItem('@orange_driver_attempts', attempts.toString());
+          Alert.alert('Login Failed', `Incorrect credentials. ${5 - attempts} attempts remaining.`);
+        }
+        throw error;
+      }
+
+      await AsyncStorage.setItem('@orange_driver_attempts', '0');
+      await AsyncStorage.removeItem('@orange_driver_lockout');
 
       if (data?.user) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -361,7 +421,8 @@ export function ChauffeurAuthModal({
                       placeholderTextColor="#64748B"
                       keyboardType="numeric"
                       value={aadhaarNumber}
-                      onChangeText={setAadhaarNumber}
+                      onChangeText={handleAadhaarChange}
+                maxLength={14}
                     />
                   </View>
                 </View>
@@ -540,6 +601,12 @@ export function ChauffeurAuthModal({
                 </Text>
               )}
             </TouchableOpacity>
+
+            {mode === 'signin' && (
+              <TouchableOpacity style={{ alignItems: 'center', marginTop: 15 }} onPress={handleForgotPassword}>
+                <Text style={{ color: '#F97316', fontSize: 14, fontWeight: '600' }}>Forgot Password?</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

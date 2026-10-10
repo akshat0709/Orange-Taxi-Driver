@@ -597,9 +597,14 @@ export default function App() {
           for (const cand of searchingBookings) {
             const candidate = cand as Booking;
             // 5km check
-            const [pLat, pLng] = candidate.pickup_address ? candidate.pickup_address.split(',').map(Number) : [null, null];
-            if (driver.current_lat && driver.current_lng && pLat && pLng) {
-              const d = getDistanceInKm(driver.current_lat, driver.current_lng, pLat, pLng);
+            const cleanAddress = candidate.pickup_address ? candidate.pickup_address.split('|')[0] : '';
+            const [pLat, pLng] = cleanAddress ? cleanAddress.split(',').map(Number) : [null, null];
+            
+            const effectiveLat = driverLocation?.latitude || driver.current_lat;
+            const effectiveLng = driverLocation?.longitude || driver.current_lng;
+            
+            if (effectiveLat && effectiveLng && pLat && !isNaN(pLng as number)) {
+              const d = getDistanceInKm(effectiveLat, effectiveLng, pLat, pLng as number);
               if (d > 5) continue;
             }
 
@@ -649,9 +654,14 @@ export default function App() {
             !incomingBooking
           ) {
             let skip = false;
-            const [nLat, nLng] = newBooking.pickup_address ? newBooking.pickup_address.split(',').map(Number) : [null, null];
-            if (driver.current_lat && driver.current_lng && nLat && nLng) {
-              const d = getDistanceInKm(driver.current_lat, driver.current_lng, nLat, nLng);
+            const cleanAddress = newBooking.pickup_address ? newBooking.pickup_address.split('|')[0] : '';
+            const [nLat, nLng] = cleanAddress ? cleanAddress.split(',').map(Number) : [null, null];
+            
+            const effectiveLat = driverLocation?.latitude || driver.current_lat;
+            const effectiveLng = driverLocation?.longitude || driver.current_lng;
+            
+            if (effectiveLat && effectiveLng && nLat && !isNaN(nLng as number)) {
+              const d = getDistanceInKm(effectiveLat, effectiveLng, nLat, nLng as number);
               if (d > 5) skip = true;
             }
             if (!skip) {
@@ -696,7 +706,7 @@ export default function App() {
       clearInterval(pollTimer);
       supabase.removeChannel(channel);
     };
-  }, [isOnline, driver, activeBooking, incomingBooking, declinedBookingIds]);
+  }, [isOnline, driver, driverLocation, activeBooking, incomingBooking, declinedBookingIds]);
 
   // Toggle Online/Offline in Supabase
   const handleToggleOnline = async () => {
@@ -828,6 +838,26 @@ export default function App() {
       updates.completed_at = new Date().toISOString();
       updates.final_fare = finalFare;
       updates.payment_status = 'completed';
+
+      // Deduct from customer wallet if payment method is wallet
+      if (activeBooking.payment_method === 'wallet' && activeBooking.customer_id) {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('wallet_balance')
+            .eq('id', activeBooking.customer_id)
+            .single();
+          if (profile) {
+            const currentBal = profile.wallet_balance || 0;
+            await supabase
+              .from('profiles')
+              .update({ wallet_balance: Math.max(0, currentBal - finalFare) })
+              .eq('id', activeBooking.customer_id);
+          }
+        } catch (err) {
+          console.warn('Wallet deduction failed:', err);
+        }
+      }
 
       // Persist directly to Supabase bookings table
       await supabase.from('bookings').update(updates).eq('id', activeBooking.id);

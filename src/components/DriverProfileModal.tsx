@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { Driver } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface DriverProfileModalProps {
   visible: boolean;
@@ -42,6 +43,32 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
   };
 
   const isLight = theme === 'light';
+
+  
+  async function handleDeleteAccount() {
+    Alert.alert(
+      "Delete Account & Data",
+      "Are you sure you want to permanently delete your driver account and all associated data? This will revoke your driving access.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete My Data",
+          style: "destructive",
+          onPress: async () => {
+            if (driver?.id) {
+              // DPDP Act: Scrub Personal Identifiable Information (PII)
+              await supabase.from('drivers').update({
+                full_name: 'DELETED_DRIVER',
+                phone: 'DELETED',
+                is_online: false,
+              }).eq('id', driver.id);
+            }
+            onLogout();
+          }
+        }
+      ]
+    );
+  }
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
