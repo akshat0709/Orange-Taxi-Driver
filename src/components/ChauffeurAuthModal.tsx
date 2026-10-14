@@ -12,7 +12,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Shield, Lock, Mail, Phone, User, Car, Zap, CheckCircle2 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -31,7 +33,8 @@ export function ChauffeurAuthModal({
   onSuccess,
   theme = 'dark',
 }: ChauffeurAuthModalProps) {
-  const isLight = theme === 'light';
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 44);
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -348,12 +351,22 @@ const handleAadhaarChange = (text: string) => {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={false}>
+    <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent={false}>
+      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={[styles.container, isLight && styles.containerLight]}
+        style={styles.container}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingTop: topInset + 16,
+              paddingBottom: Math.max(insets.bottom, 24) + 24,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Brand Hero */}
           <View style={styles.brandHero}>
             <View style={styles.iconCircle}>
@@ -725,9 +738,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F172A',
   },
   scrollContent: {
-    padding: 24,
-    paddingTop: 64,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    backgroundColor: '#0F172A',
   },
   brandHero: {
     alignItems: 'center',
@@ -1006,5 +1018,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
-  containerLight: { backgroundColor: '#F8FAFC' },
 });
