@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Modal,
@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { Shield, Lock, Mail, Phone, User, Car, Zap, CheckCircle2 } from 'lucide-react-native';
+import { Shield, Lock, Mail, Phone, User, Car, Zap, CheckCircle2, Sun, Moon } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
@@ -26,15 +26,36 @@ interface ChauffeurAuthModalProps {
   visible: boolean;
   onSuccess: (driver: Driver) => void;
   theme?: 'light' | 'dark';
+  onToggleTheme?: () => void;
 }
 
 export function ChauffeurAuthModal({
   visible,
   onSuccess,
   theme = 'dark',
+  onToggleTheme,
 }: ChauffeurAuthModalProps) {
   const insets = useSafeAreaInsets();
   const topInset = Math.max(insets.top, Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 44);
+  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>(theme);
+
+  useEffect(() => {
+    setCurrentTheme(theme);
+  }, [theme]);
+
+  const toggleTheme = async () => {
+    const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
+    setCurrentTheme(nextTheme);
+    await AsyncStorage.setItem('@orange_driver_theme', nextTheme);
+    if (onToggleTheme) {
+      onToggleTheme();
+    }
+  };
+
+  const isLight = currentTheme === 'light';
+  const iconColor = isLight ? '#64748B' : '#94A3B8';
+  const placeholderColor = isLight ? '#94A3B8' : '#64748B';
+
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -352,64 +373,106 @@ const handleAadhaarChange = (text: string) => {
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent={false}>
-      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+      <StatusBar
+        barStyle={isLight ? 'dark-content' : 'light-content'}
+        backgroundColor={isLight ? '#FFFFFF' : '#0F172A'}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
+        style={[styles.container, isLight && styles.containerLight]}
       >
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
+            isLight && styles.scrollContentLight,
             {
-              paddingTop: topInset + 16,
+              paddingTop: topInset + 8,
               paddingBottom: Math.max(insets.bottom, 24) + 24,
             },
           ]}
           showsVerticalScrollIndicator={false}
         >
+          {/* Top Actions: Dark / Light Mode Toggle */}
+          <View style={styles.topActionsRow}>
+            <TouchableOpacity
+              style={[styles.themeToggleBtn, isLight && styles.themeToggleBtnLight]}
+              onPress={toggleTheme}
+              activeOpacity={0.8}
+              accessibilityLabel="Switch theme"
+              accessibilityRole="button"
+            >
+              {isLight ? (
+                <Moon size={16} color="#0F172A" />
+              ) : (
+                <Sun size={16} color="#F97316" />
+              )}
+              <Text style={[styles.themeToggleText, isLight && styles.themeToggleTextLight]}>
+                {isLight ? 'Dark Mode' : 'Light Mode'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Brand Hero */}
           <View style={styles.brandHero}>
             <View style={styles.iconCircle}>
               <Shield size={32} color="#F97316" />
             </View>
-            <Text style={styles.brandTitle}>Orange Chauffeur OS</Text>
-            <Text style={styles.brandSubtitle}>
+            <Text style={[styles.brandTitle, isLight && styles.brandTitleLight]}>Orange Chauffeur OS</Text>
+            <Text style={[styles.brandSubtitle, isLight && styles.brandSubtitleLight]}>
               Connected to Supabase Cloud Database • Live Fleet Node
             </Text>
           </View>
 
           {/* Mode Switcher Tabs */}
-          <View style={styles.tabContainer}>
+          <View style={[styles.tabContainer, isLight && styles.tabContainerLight]}>
             <TouchableOpacity
-              style={[styles.tabBtn, mode === 'signin' && styles.tabBtnActive]}
+              style={[
+                styles.tabBtn,
+                mode === 'signin' && (isLight ? styles.tabBtnActiveLight : styles.tabBtnActive),
+              ]}
               onPress={() => setMode('signin')}
             >
-              <Text style={[styles.tabBtnText, mode === 'signin' && styles.tabBtnTextActive]}>
+              <Text
+                style={[
+                  styles.tabBtnText,
+                  isLight && styles.tabBtnTextLight,
+                  mode === 'signin' && (isLight ? styles.tabBtnTextActiveLight : styles.tabBtnTextActive),
+                ]}
+              >
                 Sign In
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.tabBtn, mode === 'signup' && styles.tabBtnActive]}
+              style={[
+                styles.tabBtn,
+                mode === 'signup' && (isLight ? styles.tabBtnActiveLight : styles.tabBtnActive),
+              ]}
               onPress={() => setMode('signup')}
             >
-              <Text style={[styles.tabBtnText, mode === 'signup' && styles.tabBtnTextActive]}>
+              <Text
+                style={[
+                  styles.tabBtnText,
+                  isLight && styles.tabBtnTextLight,
+                  mode === 'signup' && (isLight ? styles.tabBtnTextActiveLight : styles.tabBtnTextActive),
+                ]}
+              >
                 Register Chauffeur
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* Form Fields */}
-          <View style={styles.formContainer}>
+          <View style={[styles.formContainer, isLight && styles.formContainerLight]}>
             {mode === 'signup' && (
               <>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Full Name</Text>
-                  <View style={styles.inputRow}>
-                    <User size={18} color="#94A3B8" style={{ marginRight: 10 }} />
+                  <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Full Name</Text>
+                  <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
+                    <User size={18} color={iconColor} style={{ marginRight: 10 }} />
                     <TextInput
-                      style={styles.textInput}
+                      style={[styles.textInput, isLight && styles.textInputLight]}
                       placeholder="e.g. Ramesh Kumar"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor={placeholderColor}
                       value={fullName}
                       onChangeText={setFullName}
                     />
@@ -417,13 +480,13 @@ const handleAadhaarChange = (text: string) => {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Mobile Phone</Text>
-                  <View style={styles.inputRow}>
-                    <Phone size={18} color="#94A3B8" style={{ marginRight: 10 }} />
+                  <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Mobile Phone</Text>
+                  <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
+                    <Phone size={18} color={iconColor} style={{ marginRight: 10 }} />
                     <TextInput
-                      style={styles.textInput}
+                      style={[styles.textInput, isLight && styles.textInputLight]}
                       placeholder="+91 98765 43210"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor={placeholderColor}
                       keyboardType="phone-pad"
                       value={phone}
                       onChangeText={setPhone}
@@ -432,12 +495,12 @@ const handleAadhaarChange = (text: string) => {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>City</Text>
-                  <View style={styles.inputRow}>
+                  <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>City</Text>
+                  <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
                     <TextInput
-                      style={styles.textInput}
+                      style={[styles.textInput, isLight && styles.textInputLight]}
                       placeholder="e.g. Bengaluru"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor={placeholderColor}
                       value={city}
                       onChangeText={setCity}
                     />
@@ -445,12 +508,12 @@ const handleAadhaarChange = (text: string) => {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Years Driving</Text>
-                  <View style={styles.inputRow}>
+                  <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Years Driving</Text>
+                  <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
                     <TextInput
-                      style={styles.textInput}
+                      style={[styles.textInput, isLight && styles.textInputLight]}
                       placeholder="e.g. 5"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor={placeholderColor}
                       keyboardType="numeric"
                       value={yearsDriving}
                       onChangeText={setYearsDriving}
@@ -459,13 +522,13 @@ const handleAadhaarChange = (text: string) => {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Commercial Driving Licence Number</Text>
-                  <View style={styles.inputRow}>
-                    <Car size={18} color="#94A3B8" style={{ marginRight: 10 }} />
+                  <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Commercial Driving Licence Number</Text>
+                  <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
+                    <Car size={18} color={iconColor} style={{ marginRight: 10 }} />
                     <TextInput
-                      style={styles.textInput}
+                      style={[styles.textInput, isLight && styles.textInputLight]}
                       placeholder="e.g. KA0120230000000"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor={placeholderColor}
                       autoCapitalize="characters"
                       value={cdlNumber}
                       onChangeText={setCdlNumber}
@@ -474,39 +537,69 @@ const handleAadhaarChange = (text: string) => {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Aadhaar Number</Text>
-                  <View style={styles.inputRow}>
+                  <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Aadhaar Number</Text>
+                  <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
                     <TextInput
-                      style={styles.textInput}
+                      style={[styles.textInput, isLight && styles.textInputLight]}
                       placeholder="e.g. 1234 5678 9012"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor={placeholderColor}
                       keyboardType="numeric"
                       value={aadhaarNumber}
                       onChangeText={handleAadhaarChange}
-                maxLength={14}
+                      maxLength={14}
                     />
                   </View>
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Driver Photo</Text>
+                  <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Driver Photo</Text>
                   <TouchableOpacity
-                    style={[styles.inputRow, { justifyContent: 'center', backgroundColor: driverPhotoUrl ? '#10B98120' : '#0F172A', borderColor: driverPhotoUrl ? '#10B981' : '#334155' }]}
+                    style={[
+                      styles.inputRow,
+                      isLight && styles.inputRowLight,
+                      {
+                        justifyContent: 'center',
+                        backgroundColor: driverPhotoUrl
+                          ? (isLight ? '#ECFDF5' : '#10B98120')
+                          : (isLight ? '#F1F5F9' : '#0F172A'),
+                        borderColor: driverPhotoUrl ? '#10B981' : (isLight ? '#CBD5E1' : '#334155'),
+                      },
+                    ]}
                     onPress={handleUploadDriverPhoto}
                   >
-                    <Text style={{ color: driverPhotoUrl ? '#10B981' : '#F97316', fontWeight: 'bold' }}>
+                    <Text
+                      style={{
+                        color: driverPhotoUrl ? '#059669' : '#F97316',
+                        fontWeight: 'bold',
+                      }}
+                    >
                       {driverPhotoUrl ? '✓ Driver Photo Uploaded' : 'Upload Driver Photo'}
                     </Text>
                   </TouchableOpacity>
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Documents (DL & Aadhaar)</Text>
+                  <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Documents (DL & Aadhaar)</Text>
                   <TouchableOpacity
-                    style={[styles.inputRow, { justifyContent: 'center', backgroundColor: documentsUrl ? '#10B98120' : '#0F172A', borderColor: documentsUrl ? '#10B981' : '#334155' }]}
+                    style={[
+                      styles.inputRow,
+                      isLight && styles.inputRowLight,
+                      {
+                        justifyContent: 'center',
+                        backgroundColor: documentsUrl
+                          ? (isLight ? '#ECFDF5' : '#10B98120')
+                          : (isLight ? '#F1F5F9' : '#0F172A'),
+                        borderColor: documentsUrl ? '#10B981' : (isLight ? '#CBD5E1' : '#334155'),
+                      },
+                    ]}
                     onPress={handleUploadDocuments}
                   >
-                    <Text style={{ color: documentsUrl ? '#10B981' : '#F97316', fontWeight: 'bold' }}>
+                    <Text
+                      style={{
+                        color: documentsUrl ? '#059669' : '#F97316',
+                        fontWeight: 'bold',
+                      }}
+                    >
                       {documentsUrl ? '✓ Documents Uploaded' : 'Upload Documents (DL & Aadhaar)'}
                     </Text>
                   </TouchableOpacity>
@@ -514,7 +607,17 @@ const handleAadhaarChange = (text: string) => {
 
                 <View style={styles.inputGroup}>
                   <TouchableOpacity
-                    style={[styles.inputRow, { justifyContent: 'flex-start', backgroundColor: ownsVehicle ? '#10B98120' : '#0F172A', borderColor: ownsVehicle ? '#10B981' : '#334155' }]}
+                    style={[
+                      styles.inputRow,
+                      isLight && styles.inputRowLight,
+                      {
+                        justifyContent: 'flex-start',
+                        backgroundColor: ownsVehicle
+                          ? (isLight ? '#ECFDF5' : '#10B98120')
+                          : (isLight ? '#F1F5F9' : '#0F172A'),
+                        borderColor: ownsVehicle ? '#10B981' : (isLight ? '#CBD5E1' : '#334155'),
+                      },
+                    ]}
                     onPress={() => {
                       if (!ownsVehicle) {
                         setShowPartnerTermsModal(true);
@@ -526,9 +629,18 @@ const handleAadhaarChange = (text: string) => {
                     {ownsVehicle ? (
                       <CheckCircle2 size={20} color="#10B981" style={{ marginRight: 10 }} />
                     ) : (
-                      <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: '#64748B', marginRight: 10 }} />
+                      <View
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: isLight ? '#94A3B8' : '#64748B',
+                          marginRight: 10,
+                        }}
+                      />
                     )}
-                    <Text style={{ color: '#FFFFFF', fontSize: 13, flex: 1 }}>
+                    <Text style={{ color: isLight ? '#0F172A' : '#FFFFFF', fontSize: 13, flex: 1, fontWeight: '500' }}>
                       I bring my own Orange Standard Car (Partner Driver)
                     </Text>
                   </TouchableOpacity>
@@ -537,12 +649,12 @@ const handleAadhaarChange = (text: string) => {
                 {ownsVehicle && (
                   <>
                     <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Vehicle Model</Text>
-                      <View style={styles.inputRow}>
+                      <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Vehicle Model</Text>
+                      <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
                         <TextInput
-                          style={styles.textInput}
+                          style={[styles.textInput, isLight && styles.textInputLight]}
                           placeholder="e.g. Mahindra BE 6 EV"
-                          placeholderTextColor="#64748B"
+                          placeholderTextColor={placeholderColor}
                           value={vehicleModel}
                           onChangeText={setVehicleModel}
                         />
@@ -550,12 +662,12 @@ const handleAadhaarChange = (text: string) => {
                     </View>
 
                     <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Vehicle Year</Text>
-                      <View style={styles.inputRow}>
+                      <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Vehicle Year</Text>
+                      <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
                         <TextInput
-                          style={styles.textInput}
+                          style={[styles.textInput, isLight && styles.textInputLight]}
                           placeholder="e.g. 2024"
-                          placeholderTextColor="#64748B"
+                          placeholderTextColor={placeholderColor}
                           keyboardType="numeric"
                           value={vehicleYear}
                           onChangeText={setVehicleYear}
@@ -564,12 +676,12 @@ const handleAadhaarChange = (text: string) => {
                     </View>
 
                     <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Vehicle Registration Number</Text>
-                      <View style={styles.inputRow}>
+                      <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Vehicle Registration Number</Text>
+                      <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
                         <TextInput
-                          style={styles.textInput}
+                          style={[styles.textInput, isLight && styles.textInputLight]}
                           placeholder="e.g. DL 01 AB 1234"
-                          placeholderTextColor="#64748B"
+                          placeholderTextColor={placeholderColor}
                           autoCapitalize="characters"
                           value={vehicleNumber}
                           onChangeText={setVehicleNumber}
@@ -578,12 +690,12 @@ const handleAadhaarChange = (text: string) => {
                     </View>
 
                     <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Chassis Number</Text>
-                      <View style={styles.inputRow}>
+                      <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Chassis Number</Text>
+                      <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
                         <TextInput
-                          style={styles.textInput}
+                          style={[styles.textInput, isLight && styles.textInputLight]}
                           placeholder="Enter chassis number"
-                          placeholderTextColor="#64748B"
+                          placeholderTextColor={placeholderColor}
                           autoCapitalize="characters"
                           value={chassisNumber}
                           onChangeText={setChassisNumber}
@@ -594,12 +706,18 @@ const handleAadhaarChange = (text: string) => {
                 )}
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Message</Text>
-                  <View style={[styles.inputRow, { height: 100, alignItems: 'flex-start', paddingTop: 10 }]}>
+                  <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Message</Text>
+                  <View
+                    style={[
+                      styles.inputRow,
+                      isLight && styles.inputRowLight,
+                      { height: 100, alignItems: 'flex-start', paddingTop: 10 },
+                    ]}
+                  >
                     <TextInput
-                      style={[styles.textInput, { textAlignVertical: 'top' }]}
+                      style={[styles.textInput, isLight && styles.textInputLight, { textAlignVertical: 'top' }]}
                       placeholder="Anything else you'd like us to know?"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor={placeholderColor}
                       multiline
                       numberOfLines={4}
                       value={message}
@@ -611,13 +729,13 @@ const handleAadhaarChange = (text: string) => {
             )}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Chauffeur Email</Text>
-              <View style={styles.inputRow}>
-                <Mail size={18} color="#94A3B8" style={{ marginRight: 10 }} />
+              <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Chauffeur Email</Text>
+              <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
+                <Mail size={18} color={iconColor} style={{ marginRight: 10 }} />
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, isLight && styles.textInputLight]}
                   placeholder="chauffeur@orangetaxi.in"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor={placeholderColor}
                   autoCapitalize="none"
                   keyboardType="email-address"
                   value={email}
@@ -627,13 +745,13 @@ const handleAadhaarChange = (text: string) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <View style={styles.inputRow}>
-                <Lock size={18} color="#94A3B8" style={{ marginRight: 10 }} />
+              <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Password</Text>
+              <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
+                <Lock size={18} color={iconColor} style={{ marginRight: 10 }} />
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, isLight && styles.textInputLight]}
                   placeholder="••••••••••••"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor={placeholderColor}
                   secureTextEntry
                   value={password}
                   onChangeText={setPassword}
@@ -642,7 +760,7 @@ const handleAadhaarChange = (text: string) => {
             </View>
 
             {mode === 'signup' && (
-              <Text style={styles.disclaimerText}>
+              <Text style={[styles.disclaimerText, isLight && styles.disclaimerTextLight]}>
                 By submitting this form, you consent to the collection and processing of your personal data in accordance with the Digital Personal Data Protection (DPDP) Act, 2023.
               </Text>
             )}
@@ -674,45 +792,45 @@ const handleAadhaarChange = (text: string) => {
 
       <Modal visible={showPartnerTermsModal} animationType="slide" transparent={true}>
         <View style={styles.termsOverlay}>
-          <View style={styles.termsContainer}>
-            <Text style={styles.termsTitle}>Orange Standard Cab</Text>
-            <Text style={styles.termsSubtitle}>Vehicle Requirements</Text>
+          <View style={[styles.termsContainer, isLight && styles.termsContainerLight]}>
+            <Text style={[styles.termsTitle, isLight && styles.termsTitleLight]}>Orange Standard Cab</Text>
+            <Text style={[styles.termsSubtitle, isLight && styles.termsSubtitleLight]}>Vehicle Requirements</Text>
             
             <ScrollView style={styles.termsScroll}>
-              <View style={styles.termCard}>
+              <View style={[styles.termCard, isLight && styles.termCardLight]}>
                 <Zap size={24} color="#F97316" style={styles.termIcon} />
                 <View style={styles.termTextContainer}>
-                  <Text style={styles.termCardTitle}>1. 100% Electric Vehicle (EV)</Text>
-                  <Text style={styles.termCardDesc}>Must be a fully electric vehicle. No hybrids or internal combustion engines allowed. We are committed to a zero-emission future.</Text>
+                  <Text style={[styles.termCardTitle, isLight && styles.termCardTitleLight]}>1. 100% Electric Vehicle (EV)</Text>
+                  <Text style={[styles.termCardDesc, isLight && styles.termCardDescLight]}>Must be a fully electric vehicle. No hybrids or internal combustion engines allowed. We are committed to a zero-emission future.</Text>
                 </View>
               </View>
 
-              <View style={styles.termCard}>
+              <View style={[styles.termCard, isLight && styles.termCardLight]}>
                 <Car size={24} color="#F97316" style={styles.termIcon} />
                 <View style={styles.termTextContainer}>
-                  <Text style={styles.termCardTitle}>2. Signature Orange Exterior Color</Text>
-                  <Text style={styles.termCardDesc}>The vehicle must feature our signature Orange Standard exterior color to maintain brand consistency and visibility.</Text>
+                  <Text style={[styles.termCardTitle, isLight && styles.termCardTitleLight]}>2. Signature Orange Exterior Color</Text>
+                  <Text style={[styles.termCardDesc, isLight && styles.termCardDescLight]}>The vehicle must feature our signature Orange Standard exterior color to maintain brand consistency and visibility.</Text>
                 </View>
               </View>
 
-              <View style={styles.termCard}>
+              <View style={[styles.termCard, isLight && styles.termCardLight]}>
                 <CheckCircle2 size={24} color="#F97316" style={styles.termIcon} />
                 <View style={styles.termTextContainer}>
-                  <Text style={styles.termCardTitle}>3. Spotless Interior & Pre-Cooled AC</Text>
-                  <Text style={styles.termCardDesc}>Maintain an impeccably clean interior and ensure the AC is pre-cooled for maximum passenger comfort before every ride.</Text>
+                  <Text style={[styles.termCardTitle, isLight && styles.termCardTitleLight]}>3. Spotless Interior & Pre-Cooled AC</Text>
+                  <Text style={[styles.termCardDesc, isLight && styles.termCardDescLight]}>Maintain an impeccably clean interior and ensure the AC is pre-cooled for maximum passenger comfort before every ride.</Text>
                 </View>
               </View>
             </ScrollView>
 
             <View style={styles.termsActions}>
               <TouchableOpacity 
-                style={styles.termsCancelBtn} 
+                style={[styles.termsCancelBtn, isLight && styles.termsCancelBtnLight]} 
                 onPress={() => {
                   setOwnsVehicle(false);
                   setShowPartnerTermsModal(false);
                 }}
               >
-                <Text style={styles.termsCancelText}>Cancel</Text>
+                <Text style={[styles.termsCancelText, isLight && styles.termsCancelTextLight]}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -737,13 +855,47 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0F172A',
   },
+  containerLight: {
+    backgroundColor: '#FFFFFF',
+  },
   scrollContent: {
     paddingHorizontal: 20,
     backgroundColor: '#0F172A',
   },
+  scrollContentLight: {
+    backgroundColor: '#FFFFFF',
+  },
+  topActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 10,
+  },
+  themeToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#334155',
+    gap: 6,
+  },
+  themeToggleBtnLight: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+  },
+  themeToggleText: {
+    color: '#F97316',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  themeToggleTextLight: {
+    color: '#0F172A',
+  },
   brandHero: {
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 24,
   },
   iconCircle: {
     width: 64,
@@ -762,81 +914,17 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.5,
   },
+  brandTitleLight: {
+    color: '#0F172A',
+  },
   brandSubtitle: {
     color: '#94A3B8',
     fontSize: 13,
     marginTop: 4,
     textAlign: 'center',
   },
-  quickCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1.5,
-    borderColor: '#F97316',
-    marginBottom: 20,
-    shadowColor: '#F97316',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  quickCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  quickZapCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F97316',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  quickCardTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  quickCardSub: {
-    color: '#94A3B8',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  verifiedBadge: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  verifiedBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  quickCardFooter: {
-    color: '#CBD5E1',
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 14,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#334155',
-  },
-  dividerText: {
+  brandSubtitleLight: {
     color: '#64748B',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginHorizontal: 12,
   },
   tabContainer: {
     flexDirection: 'row',
@@ -844,6 +932,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 4,
     marginBottom: 18,
+  },
+  tabContainerLight: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   tabBtn: {
     flex: 1,
@@ -854,13 +947,28 @@ const styles = StyleSheet.create({
   tabBtnActive: {
     backgroundColor: '#0F172A',
   },
+  tabBtnActiveLight: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
   tabBtnText: {
     color: '#94A3B8',
     fontSize: 13,
     fontWeight: '700',
   },
+  tabBtnTextLight: {
+    color: '#64748B',
+  },
   tabBtnTextActive: {
     color: '#F97316',
+    fontWeight: '900',
+  },
+  tabBtnTextActiveLight: {
+    color: '#EA580C',
     fontWeight: '900',
   },
   formContainer: {
@@ -870,6 +978,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#334155',
   },
+  formContainerLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
   inputGroup: {
     marginBottom: 14,
   },
@@ -878,6 +995,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 6,
+  },
+  inputLabelLight: {
+    color: '#334155',
   },
   inputRow: {
     flexDirection: 'row',
@@ -889,10 +1009,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#334155',
   },
+  inputRowLight: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
+  },
   textInput: {
     flex: 1,
     color: '#FFFFFF',
     fontSize: 14,
+  },
+  textInputLight: {
+    color: '#0F172A',
   },
   submitBtn: {
     backgroundColor: '#F97316',
@@ -926,6 +1053,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     lineHeight: 16,
   },
+  disclaimerTextLight: {
+    color: '#64748B',
+  },
   termsOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -940,6 +1070,10 @@ const styles = StyleSheet.create({
     borderColor: '#334155',
     maxHeight: '80%',
   },
+  termsContainerLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+  },
   termsTitle: {
     color: '#FFFFFF',
     fontSize: 22,
@@ -947,11 +1081,17 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     textAlign: 'center',
   },
+  termsTitleLight: {
+    color: '#0F172A',
+  },
   termsSubtitle: {
     color: '#94A3B8',
     fontSize: 14,
     marginBottom: 20,
     textAlign: 'center',
+  },
+  termsSubtitleLight: {
+    color: '#64748B',
   },
   termsScroll: {
     marginBottom: 20,
@@ -964,6 +1104,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#334155',
+  },
+  termCardLight: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
   },
   termIcon: {
     marginRight: 16,
@@ -978,10 +1122,16 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 4,
   },
+  termCardTitleLight: {
+    color: '#0F172A',
+  },
   termCardDesc: {
     color: '#94A3B8',
     fontSize: 13,
     lineHeight: 18,
+  },
+  termCardDescLight: {
+    color: '#475569',
   },
   termsActions: {
     flexDirection: 'row',
@@ -999,10 +1149,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 6,
   },
+  termsCancelBtnLight: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+  },
   termsCancelText: {
     color: '#94A3B8',
     fontSize: 14,
     fontWeight: '700',
+  },
+  termsCancelTextLight: {
+    color: '#475569',
   },
   termsAgreeBtn: {
     flex: 2,

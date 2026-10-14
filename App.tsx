@@ -966,14 +966,16 @@ export default function App() {
   }
 
   if (isPendingApproval) {
+    const isLight = theme === 'light';
     return (
       <SafeAreaProvider>
-        <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
+        <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={isLight ? '#FFFFFF' : '#0F172A'} />
+        <View style={[styles.container, isLight && styles.containerLight, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
           <Shield size={64} color="#F97316" style={{ marginBottom: 24 }} />
-          <Text style={{ color: '#FFF', fontSize: 24, fontWeight: '800', marginBottom: 12, textAlign: 'center' }}>
+          <Text style={[{ color: '#FFF', fontSize: 24, fontWeight: '800', marginBottom: 12, textAlign: 'center' }, isLight && { color: '#0F172A' }]}>
             Pending Approval
           </Text>
-          <Text style={{ color: '#94A3B8', fontSize: 16, textAlign: 'center', marginBottom: 48, lineHeight: 24 }}>
+          <Text style={[{ color: '#94A3B8', fontSize: 16, textAlign: 'center', marginBottom: 48, lineHeight: 24 }, isLight && { color: '#64748B' }]}>
             Your application is currently under review by Orange Taxi Admin. Please check back later.
           </Text>
           <TouchableOpacity
@@ -1238,6 +1240,7 @@ export default function App() {
             await fetchTodayStats(authenticatedDriver.id, authenticatedDriver);
           }}
           theme={theme}
+          onToggleTheme={handleToggleTheme}
         />
 
       </View>
@@ -1249,6 +1252,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0F172A',
+  },
+  containerLight: {
+    backgroundColor: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
