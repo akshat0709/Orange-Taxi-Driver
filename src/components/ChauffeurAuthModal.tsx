@@ -163,28 +163,76 @@ const handleAadhaarChange = (text: string) => {
       if (data?.user) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+        let driverRowFinal = null;
+
         const { data: driverRow } = await supabase
           .from('drivers')
           .select('*')
           .eq('user_id', data.user.id)
           .maybeSingle();
 
+        driverRowFinal = driverRow;
+
+        if (!driverRowFinal) {
+          const userEmail = data.user.email || '';
+          const userPhone = data.user.phone || data.user.user_metadata?.phone || '';
+
+          if (userEmail) {
+            const { data: profileRow } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('email', userEmail)
+              .maybeSingle();
+            if (profileRow) {
+              const { data: byProfileId } = await supabase
+                .from('drivers')
+                .select('*')
+                .eq('user_id', profileRow.id)
+                .maybeSingle();
+              if (byProfileId) driverRowFinal = byProfileId;
+            }
+          }
+
+          if (!driverRowFinal && userPhone) {
+            const digits = userPhone.replace(/\D/g, '');
+            const { data: allDrivers } = await supabase
+              .from('drivers')
+              .select('*')
+              .limit(200);
+            if (allDrivers) {
+              driverRowFinal = allDrivers.find((d: any) =>
+                d.phone && d.phone.replace(/\D/g, '').endsWith(digits.slice(-10))
+              ) || null;
+            }
+          }
+
+          if (driverRowFinal && !driverRowFinal.user_id) {
+            await supabase
+              .from('drivers')
+              .update({ user_id: data.user.id })
+              .eq('id', driverRowFinal.id);
+            driverRowFinal.user_id = data.user.id;
+          }
+        }
+
         const driverProfile: Driver = {
-          id: driverRow?.id || data.user.id,
+          id: driverRowFinal?.id || data.user.id,
           user_id: data.user.id,
-          full_name: driverRow?.full_name || data.user.user_metadata?.full_name || 'Orange Chauffeur',
-          phone: driverRow?.phone || data.user.user_metadata?.phone || '+91 98765 43210',
-          city: driverRow?.city || city,
-          vehicle_model: driverRow?.vehicle_model || 'Mahindra BE 6 EV',
-          vehicle_number: driverRow?.vehicle_number || 'DL 01 AB 1234',
-          vehicle_type: 'BE 6 VIP SUV',
+          full_name: driverRowFinal?.full_name || data.user.user_metadata?.full_name || 'Orange Chauffeur',
+          phone: driverRowFinal?.phone || data.user.user_metadata?.phone || '+91 98765 43210',
+          city: driverRowFinal?.city || city,
+          vehicle_model: driverRowFinal?.vehicle_model || 'No Vehicle Assigned',
+          vehicle_number: driverRowFinal?.vehicle_number || '',
+          vehicle_type: driverRowFinal?.vehicle_type || '',
           is_online: true,
-          current_lat: driverRow?.current_lat || 12.9716,
-          current_lng: driverRow?.current_lng || 77.5946,
-          rating: driverRow?.rating || 4.94,
-          total_rides: driverRow?.total_rides || 1420,
-          total_trips: driverRow?.total_rides || 1420,
-          status: 'active',
+          current_lat: driverRowFinal?.current_lat || 12.9716,
+          current_lng: driverRowFinal?.current_lng || 77.5946,
+          rating: driverRowFinal?.rating || 0,
+          total_rides: driverRowFinal?.total_rides || 0,
+          total_trips: driverRowFinal?.total_rides || 0,
+          status: driverRowFinal?.status || 'active',
+          photo_url: driverRowFinal?.photo_url || undefined,
+          dl_url: driverRowFinal?.dl_url || undefined,
         };
 
         onSuccess(driverProfile);

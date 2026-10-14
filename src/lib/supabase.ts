@@ -1,4 +1,4 @@
-
+import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
@@ -15,21 +15,39 @@ function isNewSupabaseApiKey(value: string): boolean {
 
 function createSupabaseFetch(supabaseKey: string): typeof fetch {
   return (input, init) => {
-    const headers = new Headers(
-      typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined
-    );
+    const headerObj: Record<string, string> = {};
 
     if (init?.headers) {
-      new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+      if (typeof (init.headers as any).forEach === 'function') {
+        (init.headers as any).forEach((value: string, key: string) => {
+          headerObj[key] = String(value);
+        });
+      } else if (Array.isArray(init.headers)) {
+        init.headers.forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            headerObj[key] = String(value);
+          }
+        });
+      } else if (typeof init.headers === 'object') {
+        Object.entries(init.headers).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            headerObj[key] = String(value);
+          }
+        });
+      }
     }
 
     // New Supabase API keys are opaque strings, not bearer JWTs.
-    if (isNewSupabaseApiKey(supabaseKey) && headers.get('Authorization') === `Bearer ${supabaseKey}`) {
-      headers.delete('Authorization');
+    if (isNewSupabaseApiKey(supabaseKey)) {
+      const authHeader = headerObj['Authorization'] || headerObj['authorization'];
+      if (authHeader === `Bearer ${supabaseKey}`) {
+        delete headerObj['Authorization'];
+        delete headerObj['authorization'];
+      }
     }
 
-    headers.set('apikey', supabaseKey);
-    return fetch(input, { ...init, headers });
+    headerObj['apikey'] = supabaseKey;
+    return fetch(input, { ...init, headers: headerObj });
   };
 }
 

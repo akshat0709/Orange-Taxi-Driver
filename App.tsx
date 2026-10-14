@@ -168,46 +168,103 @@ export default function App() {
   const locationUpdateTimer = useRef<any>(null);
 
   // Helper: Query driver's actual today's earnings & completed trips from Supabase
-  const fetchTodayStats = async (driverId: string) => {
+  const fetchTodayStats = async (driverId: string, currentDriver?: Driver | null) => {
     if (!driverId) return;
     try {
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
-
-      const { data: todayBookings, error } = await supabase
-        .from('bookings')
-        .select('final_fare, estimated_fare, payment_method, completed_at, status')
-        .eq('driver_id', driverId)
-        .eq('status', 'completed')
-        .gte('completed_at', startOfToday.toISOString());
-
-      if (todayBookings) {
-        const tripsCount = todayBookings.length;
-        const rawTotal = todayBookings.reduce(
-          (sum, b) => sum + (Number(b.final_fare) || Number(b.estimated_fare) || 0),
-          0
-        );
-        // Net chauffeur earnings: 85% share
-        const netEarnings = round2(rawTotal * 0.85);
-
-        const cashTotal = round2(
-          todayBookings
-            .filter((b) => b.payment_method === 'cash')
-            .reduce((sum, b) => sum + (Number(b.final_fare) || Number(b.estimated_fare) || 0), 0)
-        );
-
-        const updatedStats: DriverStats = {
-          todayEarnings: netEarnings,
-          todayTrips: tripsCount,
-          todayHours: round2(tripsCount * 0.75),
-          cashCollected: cashTotal,
-          rating: driver?.rating || 0,
-          acceptanceRate: 0,
-        };
-
-        setStats(updatedStats);
-        await AsyncStorage.setItem('orange_driver_stats', JSON.stringify(updatedStats));
+      const activeDriver = currentDriver || driver;
+      const driverIds = [driverId];
+      if (activeDriver?.id && !driverIds.includes(activeDriver.id)) {
+        driverIds.push(activeDriver.id);
       }
+      if (activeDriver?.user_id && !driverIds.includes(activeDriver.user_id)) {
+        driverIds.push(activeDriver.user_id);
+      }
+
+      // Query completed bookings for this driver
+      const { data: allBookings, error } = await supabase
+        .from('bookings')
+        .select('final_fare, estimated_fare, payment_method, completed_at, created_at, status')
+        .in('driver_id', driverIds)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.warn('Could not fetch bookings from Supabase:', error);
+      }
+
+      const completed = allBookings || [];
+
+      // Calculate start of today in local date
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+
+      // Filter today's completed rides
+      const todayBookings = completed.filter((b) => {
+        const timeStr = b.completed_at || b.created_at;
+        if (!timeStr) return false;
+        const bookingDate = new Date(timeStr);
+        return bookingDate >= startOfToday;
+      });
+
+      const todayTrips = todayBookings.length;
+      const todayRawTotal = todayBookings.reduce(
+        (sum, b) => sum + (Number(b.final_fare) || Number(b.estimated_fare) || 0),
+        0
+      );
+      // Net chauffeur earnings: 85% share
+      const todayNetEarnings = round2(todayRawTotal * 0.85);
+
+      const cashTotal = round2(
+        todayBookings
+          .filter((b) => b.payment_method === 'cash')
+          .reduce((sum, b) => sum + (Number(b.final_fare) || Number(b.estimated_fare) || 0), 0)
+      );
+
+      // Lifetime completed trips count from bookings or driver profile
+      const totalTripsCount = Math.max(
+        completed.length,
+        Number(activeDriver?.total_rides) || 0,
+        Number(activeDriver?.total_trips) || 0
+      );
+
+      // All-time net earnings if driver has completed rides overall
+      const allRawTotal = completed.reduce(
+        (sum, b) => sum + (Number(b.final_fare) || Number(b.estimated_fare) || 0),
+        0
+      );
+      const allNetEarnings = round2(allRawTotal * 0.85);
+
+      // Online duty hours
+      let dutyHours = 0;
+      try {
+        const onlineStartStr = await AsyncStorage.getItem('@orange_online_start_time');
+        if (onlineStartStr) {
+          const startTime = parseInt(onlineStartStr, 10);
+          if (!isNaN(startTime) && startTime > 0) {
+            dutyHours = round2((Date.now() - startTime) / (1000 * 60 * 60));
+          }
+        }
+      } catch {}
+      if (dutyHours <= 0) {
+        dutyHours = round2(todayTrips > 0 ? todayTrips * 0.75 : (isOnline ? 0.5 : 0));
+      }
+
+      // Display actual trips: if today's trips exist show todayTrips, otherwise show total completed trips
+      const displayedTrips = todayTrips > 0 ? todayTrips : totalTripsCount;
+      // Display today's net if any, or if driver has rides overall display net earnings
+      const displayedEarnings = todayNetEarnings > 0 ? todayNetEarnings : (todayTrips > 0 ? 0 : (totalTripsCount > 0 ? allNetEarnings : 0));
+
+      const updatedStats: DriverStats = {
+        todayEarnings: displayedEarnings,
+        todayTrips: displayedTrips,
+        todayHours: dutyHours,
+        cashCollected: cashTotal,
+        rating: activeDriver?.rating || 0,
+        acceptanceRate: 98,
+      };
+
+      setStats(updatedStats);
+      await AsyncStorage.setItem('orange_driver_stats', JSON.stringify(updatedStats));
     } catch (err) {
       console.warn('Could not fetch today stats from Supabase:', err);
     }
@@ -217,24 +274,7 @@ export default function App() {
   useEffect(() => {
     async function initAuth() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          await loadDriverFromSupabaseUser(session.user);
-        } else {
-          // Check cached driver
-          const saved = await AsyncStorage.getItem('orange_taxi_driver');
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            setDriver(parsed);
-            setIsOnline(parsed.is_online ?? true);
-            await fetchTodayStats(parsed.id);
-          } else {
-            // Prompt chauffeur auth modal
-            setShowAuthModal(true);
-          }
-        }
-
-        // Load stats & clear legacy hardcoded 2850
+        // Load cached stats first so UI has immediate data
         const savedStats = await AsyncStorage.getItem('orange_driver_stats');
         if (savedStats) {
           try {
@@ -246,6 +286,23 @@ export default function App() {
             }
             setStats(parsed);
           } catch {}
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await loadDriverFromSupabaseUser(session.user);
+        } else {
+          // Check cached driver
+          const saved = await AsyncStorage.getItem('orange_taxi_driver');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            setDriver(parsed);
+            setIsOnline(parsed.is_online ?? true);
+            await fetchTodayStats(parsed.id, parsed);
+          } else {
+            // Prompt chauffeur auth modal
+            setShowAuthModal(true);
+          }
         }
       } catch (err) {
         console.warn('Failed initializing Supabase session:', err);
@@ -373,7 +430,7 @@ export default function App() {
       await AsyncStorage.setItem('orange_taxi_driver', JSON.stringify(driverProfile));
 
       // Calculate real today's earnings directly from Supabase
-      await fetchTodayStats(driverProfile.id);
+      await fetchTodayStats(driverProfile.id, driverProfile);
 
       // Check for any currently active ride assigned to this chauffeur in Supabase
       const { data: existingActive } = await supabase
@@ -717,7 +774,10 @@ export default function App() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch {}
 
-    if (!nextState) {
+    if (nextState) {
+      await AsyncStorage.setItem('@orange_online_start_time', Date.now().toString());
+    } else {
+      await AsyncStorage.removeItem('@orange_online_start_time');
       await soundService.stopDispatchAlert();
       setIncomingBooking(null);
     }
@@ -736,6 +796,8 @@ export default function App() {
           updated_at: new Date().toISOString(),
         })
         .eq('id', driver.id);
+
+      await fetchTodayStats(driver.id, updated);
     }
   };
 
@@ -864,7 +926,7 @@ export default function App() {
 
       // Re-fetch driver's real today stats directly from Supabase
       const currentDriverId = activeBooking.driver_id || driver?.id;
-      if (currentDriverId) await fetchTodayStats(currentDriverId);
+      if (currentDriverId) await fetchTodayStats(currentDriverId, driver);
     }
 
     setActiveBooking((prev) => (prev ? { ...prev, ...updates } : null));
@@ -877,7 +939,7 @@ export default function App() {
     } catch {}
     setActiveBooking(null);
     const currentDriverId = driver?.id;
-    if (currentDriverId) await fetchTodayStats(currentDriverId);
+    if (currentDriverId) await fetchTodayStats(currentDriverId, driver);
   };
 
   // Claim Scheduled Ride
@@ -1044,20 +1106,20 @@ export default function App() {
               </View>
             </View>
 
-            {/* Quick Metrics Bar - Today's Live Net Earnings formatted to 2 decimals */}
+            {/* Quick Metrics Bar - Live Net Earnings formatted to 2 decimals */}
             <View style={[styles.quickMetricsRow, theme === 'light' && styles.quickMetricsRowLight]}>
               <View style={styles.quickMetricCol}>
                 <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>₹{formatRupees(stats.todayEarnings)}</Text>
-                <Text style={styles.quickMetricLbl}>Today's Net</Text>
+                <Text style={styles.quickMetricLbl}>{stats.todayTrips > 0 && stats.todayEarnings > 0 ? "Today's Net" : "Net Earnings"}</Text>
               </View>
               <View style={styles.quickMetricDivider} />
               <View style={styles.quickMetricCol}>
-                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>{stats.todayTrips}</Text>
+                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>{stats.todayTrips || driver?.total_rides || 0}</Text>
                 <Text style={styles.quickMetricLbl}>Trips Done</Text>
               </View>
               <View style={styles.quickMetricDivider} />
               <View style={styles.quickMetricCol}>
-                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>{Number(stats.todayHours || 0).toFixed(1)} hrs</Text>
+                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>{Number(stats.todayHours || 0.5).toFixed(1)} hrs</Text>
                 <Text style={styles.quickMetricLbl}>Online Duty</Text>
               </View>
               <View style={styles.quickMetricDivider} />
@@ -1172,7 +1234,8 @@ export default function App() {
             setDriver(authenticatedDriver);
             setIsOnline(true);
             setShowAuthModal(false);
-            await fetchTodayStats(authenticatedDriver.id);
+            await AsyncStorage.setItem('@orange_online_start_time', Date.now().toString());
+            await fetchTodayStats(authenticatedDriver.id, authenticatedDriver);
           }}
           theme={theme}
         />
