@@ -131,8 +131,8 @@ const handleAadhaarChange = (text: string) => {
 
       const storedLockout = await AsyncStorage.getItem('@orange_driver_lockout');
       if (storedLockout && parseInt(storedLockout) > Date.now()) {
-        const remaining = Math.ceil((parseInt(storedLockout) - Date.now()) / 60000);
-        Alert.alert('Account Locked', `Too many failed attempts. Please try again in ${remaining} minutes.`);
+        const remainingSeconds = Math.ceil((parseInt(storedLockout) - Date.now()) / 1000);
+        Alert.alert('Account Locked', `Too many failed attempts. Please try again in ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'}.`);
         setLoading(false);
         return;
       }
@@ -147,12 +147,12 @@ const handleAadhaarChange = (text: string) => {
         let attempts = storedAttempts ? parseInt(storedAttempts) : 0;
         attempts++;
         if (attempts >= 5) {
-          await AsyncStorage.setItem('@orange_driver_lockout', (Date.now() + 15 * 60 * 1000).toString());
+          await AsyncStorage.setItem('@orange_driver_lockout', (Date.now() + 60 * 1000).toString());
           await AsyncStorage.setItem('@orange_driver_attempts', '0');
-          Alert.alert('Account Locked', '5 unsuccessful attempts. Locked for 15 minutes.');
+          Alert.alert('Account Locked', '5 unsuccessful attempts. Please wait 1 minute before trying again.');
         } else {
           await AsyncStorage.setItem('@orange_driver_attempts', attempts.toString());
-          Alert.alert('Login Failed', `Incorrect credentials. ${5 - attempts} attempts remaining.`);
+          Alert.alert('Login Failed', `Incorrect credentials. ${5 - attempts} attempt${5 - attempts === 1 ? '' : 's'} remaining.`);
         }
         throw error;
       }
