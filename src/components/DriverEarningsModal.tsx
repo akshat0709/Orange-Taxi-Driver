@@ -65,21 +65,37 @@ export function DriverEarningsModal({
     }
   }
 
-  // Calculate earnings metrics rounded strictly to 2 decimal places
-  const rawTotal = completedTrips.reduce(
+  // Calculate today vs lifetime earnings metrics rounded strictly to 2 decimal places
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+
+  const todayTrips = completedTrips.filter((t) => {
+    const timeStr = t.completed_at || t.created_at;
+    if (!timeStr) return false;
+    return new Date(timeStr) >= startOfToday;
+  });
+
+  // Today's Net earnings: 85% chauffeur payout of today's trips
+  const todayRaw = todayTrips.reduce(
     (acc, t) => acc + (Number(t.final_fare) || Number(t.estimated_fare) || 0),
     0
   );
-  // Net earnings: 85% chauffeur payout
-  const totalEarnings = round2(rawTotal * 0.85);
+  const todayEarnings = round2(todayRaw * 0.85);
 
-  const cashTotal = round2(
-    completedTrips
+  // All-time lifetime net earnings: 85% of all completed trips
+  const allRawTotal = completedTrips.reduce(
+    (acc, t) => acc + (Number(t.final_fare) || Number(t.estimated_fare) || 0),
+    0
+  );
+  const allTimeEarnings = round2(allRawTotal * 0.85);
+
+  const cashToday = round2(
+    todayTrips
       .filter((t) => t.payment_method === 'cash')
       .reduce((acc, t) => acc + (Number(t.final_fare) || Number(t.estimated_fare) || 0), 0)
   );
 
-  const digitalTotal = round2(Math.max(0, totalEarnings - cashTotal));
+  const digitalToday = round2(Math.max(0, todayEarnings - cashToday));
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
@@ -100,27 +116,29 @@ export function DriverEarningsModal({
           </TouchableOpacity>
         </View>
 
-        {/* Big Earnings Balance Card */}
+        {/* Big Earnings Balance Card - Today's Performance Focus */}
         <View style={styles.metricsWrapper}>
           <View style={[styles.mainCard, isDark && styles.mainCardDark]}>
-            <Text style={styles.mainCardLabel}>Total Net Earnings</Text>
+            <Text style={styles.mainCardLabel}>Today's Net Earnings</Text>
             <View style={styles.mainCardAmountRow}>
               <IndianRupee size={28} color="#FFFFFF" />
-              <Text style={styles.mainCardAmount}>{formatRupees(totalEarnings)}</Text>
+              <Text style={styles.mainCardAmount}>{formatRupees(todayEarnings)}</Text>
             </View>
-            <Text style={styles.mainCardSub}>{completedTrips.length} Completed Trips Today</Text>
+            <Text style={styles.mainCardSub}>
+              {todayTrips.length} Completed Trips Today • ₹{formatRupees(allTimeEarnings)} Lifetime Total ({completedTrips.length} trips)
+            </Text>
           </View>
 
-          {/* Breakdown: Cash Collected vs Digital Bank Payout */}
+          {/* Breakdown: Cash Collected vs Digital Bank Payout Today */}
           <View style={styles.breakdownRow}>
             <View style={[styles.breakdownItem, isDark && styles.breakdownItemDark]}>
               <View style={styles.breakdownIconWrap}>
                 <Banknote size={15} color="#F97316" />
               </View>
               <View>
-                <Text style={styles.breakdownLabel}>Cash in Hand</Text>
+                <Text style={styles.breakdownLabel}>Today's Cash</Text>
                 <Text style={[styles.breakdownValue, isDark && styles.textWhite]}>
-                  ₹{formatRupees(cashTotal)}
+                  ₹{formatRupees(cashToday)}
                 </Text>
               </View>
             </View>
@@ -130,9 +148,9 @@ export function DriverEarningsModal({
                 <CreditCard size={15} color="#10B981" />
               </View>
               <View>
-                <Text style={styles.breakdownLabel}>Bank Payout</Text>
+                <Text style={styles.breakdownLabel}>Today's Bank Payout</Text>
                 <Text style={[styles.breakdownValue, isDark && styles.textWhite]}>
-                  ₹{formatRupees(digitalTotal)}
+                  ₹{formatRupees(digitalToday)}
                 </Text>
               </View>
             </View>

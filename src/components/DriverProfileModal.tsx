@@ -15,12 +15,14 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { Driver } from '../types';
+import { Driver, DriverStats } from '../types';
 import { supabase } from '../lib/supabase';
+import { formatRupees } from '../lib/formatters';
 
 interface DriverProfileModalProps {
   visible: boolean;
   driver: Driver;
+  stats?: DriverStats;
   onClose: () => void;
   onLogout: () => void;
   onUpdateDriver?: (updates: Partial<Driver>) => void;
@@ -31,6 +33,7 @@ interface DriverProfileModalProps {
 export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
   visible,
   driver,
+  stats,
   onClose,
   onLogout,
   onUpdateDriver,
@@ -146,11 +149,35 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
                 <Text style={styles.driverPhone}>{driver.phone || '+91 98765 43210'}</Text>
                 <View style={styles.ratingBadgeRow}>
                   <Text style={styles.ratingStar}>★</Text>
-                  <Text style={[styles.ratingNumber, isLight && styles.textDark]}>{(driver.rating || 4.92).toFixed(2)}</Text>
+                  <Text style={[styles.ratingNumber, isLight && styles.textDark]}>{(driver.rating || 5.0).toFixed(2)}</Text>
                   <Text style={styles.tripCountBullet}>•</Text>
-                  <Text style={styles.tripCountText}>{driver.total_trips || 1248} trips</Text>
+                  <Text style={styles.tripCountText}>{driver.total_rides || driver.total_trips || stats?.totalTrips || 0} total trips</Text>
                   <Text style={styles.tierText}>• Gold Chauffeur</Text>
                 </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Today's Shift Performance */}
+          <View style={[styles.sectionCard, isLight && styles.cardLight]}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>TODAY'S SHIFT PERFORMANCE</Text>
+              <View style={[styles.verifiedTag, { backgroundColor: '#F97316' }]}>
+                <Text style={[styles.verifiedTagText, { color: '#FFFFFF' }]}>TODAY</Text>
+              </View>
+            </View>
+            <View style={styles.metricsRow}>
+              <View style={[styles.metricCard, isLight && styles.innerBoxLight]}>
+                <Text style={[styles.metricVal, isLight && styles.textDark]}>₹{formatRupees(stats?.todayEarnings || 0)}</Text>
+                <Text style={styles.metricLbl}>Today's Net</Text>
+              </View>
+              <View style={[styles.metricCard, isLight && styles.innerBoxLight]}>
+                <Text style={[styles.metricVal, isLight && styles.textDark]}>{stats?.todayTrips || 0}</Text>
+                <Text style={styles.metricLbl}>Today's Trips</Text>
+              </View>
+              <View style={[styles.metricCard, isLight && styles.innerBoxLight]}>
+                <Text style={[styles.metricVal, isLight && styles.textDark]}>{Number(stats?.todayHours || 0).toFixed(1)} hrs</Text>
+                <Text style={styles.metricLbl}>Online Duty</Text>
               </View>
             </View>
           </View>
@@ -175,7 +202,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
                   <>
                     <Text style={[styles.vehicleModel, isLight && styles.textDark]}>{driver.vehicle_model}</Text>
                     <Text style={styles.vehiclePlate}>{driver.vehicle_number}</Text>
-                    <Text style={styles.vehicleCategory}>{driver.vehicle_type || 'Standard Cab'}</Text>
+                    <Text style={styles.vehicleCategory}>{driver.vehicle_type || 'Mahindra BE 6 Signature'}</Text>
                   </>
                 ) : (
                   <>
@@ -189,19 +216,19 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
 
           {/* Performance Metrics */}
           <View style={[styles.sectionCard, isLight && styles.cardLight]}>
-            <Text style={styles.sectionTitle}>PERFORMANCE & QUALITY SCORE</Text>
+            <Text style={styles.sectionTitle}>LIFETIME PERFORMANCE & QUALITY</Text>
             <View style={styles.metricsRow}>
               <View style={[styles.metricCard, isLight && styles.innerBoxLight]}>
-                <Text style={[styles.metricVal, isLight && styles.textDark]}>97.4%</Text>
-                <Text style={styles.metricLbl}>Acceptance Rate</Text>
+                <Text style={[styles.metricVal, isLight && styles.textDark]}>₹{formatRupees(stats?.totalEarnings || 0)}</Text>
+                <Text style={styles.metricLbl}>Lifetime Net</Text>
               </View>
               <View style={[styles.metricCard, isLight && styles.innerBoxLight]}>
-                <Text style={[styles.metricVal, isLight && styles.textDark]}>0.8%</Text>
-                <Text style={styles.metricLbl}>Cancellation</Text>
+                <Text style={[styles.metricVal, isLight && styles.textDark]}>{driver.total_rides || driver.total_trips || stats?.totalTrips || 0}</Text>
+                <Text style={styles.metricLbl}>All-Time Trips</Text>
               </View>
               <View style={[styles.metricCard, isLight && styles.innerBoxLight]}>
-                <Text style={[styles.metricVal, isLight && styles.textDark]}>99.1%</Text>
-                <Text style={styles.metricLbl}>On-Time Arrival</Text>
+                <Text style={[styles.metricVal, isLight && styles.textDark]}>{stats?.acceptanceRate || 98}%</Text>
+                <Text style={styles.metricLbl}>Acceptance</Text>
               </View>
             </View>
           </View>

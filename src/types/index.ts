@@ -66,4 +66,6 @@ export interface DriverStats {
   cashCollected: number;
   rating: number;
   acceptanceRate: number;
+  totalEarnings?: number;
+  totalTrips?: number;
 }

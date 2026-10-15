@@ -278,18 +278,16 @@ export default function App() {
         dutyHours = round2(todayTrips > 0 ? todayTrips * 0.75 : (isOnline ? 0.5 : 0));
       }
 
-      // Display actual trips: if today's trips exist show todayTrips, otherwise show total completed trips
-      const displayedTrips = todayTrips > 0 ? todayTrips : totalTripsCount;
-      // Display today's net if any, or if driver has rides overall display net earnings
-      const displayedEarnings = todayNetEarnings > 0 ? todayNetEarnings : (todayTrips > 0 ? 0 : (totalTripsCount > 0 ? allNetEarnings : 0));
-
+      // Strictly separate today's stats from all-time stats
       const updatedStats: DriverStats = {
-        todayEarnings: displayedEarnings,
-        todayTrips: displayedTrips,
+        todayEarnings: todayNetEarnings, // Strictly earnings completed today!
+        todayTrips: todayTrips,         // Strictly trips completed today!
         todayHours: dutyHours,
         cashCollected: cashTotal,
-        rating: activeDriver?.rating || 0,
+        rating: activeDriver?.rating || 5.0,
         acceptanceRate: 98,
+        totalEarnings: allNetEarnings,  // Lifetime net earnings
+        totalTrips: totalTripsCount,    // Lifetime total trips
       };
 
       setStats(updatedStats);
@@ -1145,26 +1143,26 @@ export default function App() {
               </View>
             </View>
 
-            {/* Quick Metrics Bar - Live Net Earnings formatted to 2 decimals */}
+            {/* Quick Metrics Bar - Today's Performance */}
             <View style={[styles.quickMetricsRow, theme === 'light' && styles.quickMetricsRowLight]}>
               <View style={styles.quickMetricCol}>
                 <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>₹{formatRupees(stats.todayEarnings)}</Text>
-                <Text style={styles.quickMetricLbl}>{stats.todayTrips > 0 && stats.todayEarnings > 0 ? "Today's Net" : "Net Earnings"}</Text>
+                <Text style={styles.quickMetricLbl}>Today's Net</Text>
               </View>
               <View style={styles.quickMetricDivider} />
               <View style={styles.quickMetricCol}>
-                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>{stats.todayTrips || driver?.total_rides || 0}</Text>
-                <Text style={styles.quickMetricLbl}>Trips Done</Text>
+                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>{stats.todayTrips}</Text>
+                <Text style={styles.quickMetricLbl}>Today's Trips</Text>
               </View>
               <View style={styles.quickMetricDivider} />
               <View style={styles.quickMetricCol}>
-                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>{Number(stats.todayHours || 0.5).toFixed(1)} hrs</Text>
+                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>{Number(stats.todayHours || 0).toFixed(1)} hrs</Text>
                 <Text style={styles.quickMetricLbl}>Online Duty</Text>
               </View>
               <View style={styles.quickMetricDivider} />
               <View style={styles.quickMetricCol}>
-                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>★ {(driver?.rating || 4.94).toFixed(2)}</Text>
-                <Text style={styles.quickMetricLbl}>Chauffeur</Text>
+                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>★ {(driver?.rating || stats.rating || 5.0).toFixed(1)}</Text>
+                <Text style={styles.quickMetricLbl}>Rating</Text>
               </View>
             </View>
           </View>
@@ -1252,6 +1250,7 @@ export default function App() {
           <DriverProfileModal
             visible={showProfileModal}
             driver={driver}
+            stats={stats}
             onClose={() => setShowProfileModal(false)}
             onLogout={async () => {
               await supabase.auth.signOut();
