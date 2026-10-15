@@ -13,6 +13,7 @@ import {
   Platform,
   ScrollView,
   StatusBar,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -762,9 +763,24 @@ const handleAadhaarChange = (text: string) => {
             </View>
 
             {mode === 'signup' && (
-              <Text style={[styles.disclaimerText, isLight && styles.disclaimerTextLight]}>
-                By submitting this form, you consent to the collection and processing of your personal data in accordance with the Digital Personal Data Protection (DPDP) Act, 2023.
-              </Text>
+              <View style={{ marginBottom: 12 }}>
+                <Text style={[styles.disclaimerText, isLight && styles.disclaimerTextLight]}>
+                  By submitting this form, you consent to data processing under the Digital Personal Data Protection (DPDP) Act, 2023 and agree to our{' '}
+                  <Text
+                    style={{ color: '#F97316', fontWeight: '600', textDecorationLine: 'underline' }}
+                    onPress={() => Linking.openURL('https://orange-taxi.com/privacy')}
+                  >
+                    Privacy Policy
+                  </Text>
+                  {' & '}
+                  <Text
+                    style={{ color: '#F97316', fontWeight: '600', textDecorationLine: 'underline' }}
+                    onPress={() => Linking.openURL('https://orange-taxi.com/terms')}
+                  >
+                    Terms of Service
+                  </Text>.
+                </Text>
+              </View>
             )}
 
             {/* Submit Action Button */}
@@ -784,9 +800,30 @@ const handleAadhaarChange = (text: string) => {
             </TouchableOpacity>
 
             {mode === 'signin' && (
-              <TouchableOpacity style={{ alignItems: 'center', marginTop: 15 }} onPress={handleForgotPassword}>
-                <Text style={{ color: '#F97316', fontSize: 14, fontWeight: '600' }}>Forgot Password?</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity style={{ alignItems: 'center', marginTop: 15 }} onPress={handleForgotPassword}>
+                  <Text style={{ color: '#F97316', fontSize: 14, fontWeight: '600' }}>Forgot Password?</Text>
+                </TouchableOpacity>
+
+                <View style={{ marginTop: 16, paddingHorizontal: 12 }}>
+                  <Text style={[styles.disclaimerText, isLight && styles.disclaimerTextLight, { textAlign: 'center' }]}>
+                    By signing in to Chauffeur Console, you agree to Orange Taxi&apos;s{' '}
+                    <Text
+                      style={{ color: '#F97316', fontWeight: '600', textDecorationLine: 'underline' }}
+                      onPress={() => Linking.openURL('https://orange-taxi.com/privacy')}
+                    >
+                      Privacy Policy
+                    </Text>
+                    {' and '}
+                    <Text
+                      style={{ color: '#F97316', fontWeight: '600', textDecorationLine: 'underline' }}
+                      onPress={() => Linking.openURL('https://orange-taxi.com/terms')}
+                    >
+                      Terms of Service
+                    </Text>.
+                  </Text>
+                </View>
+              </>
             )}
           </View>
         </ScrollView>
