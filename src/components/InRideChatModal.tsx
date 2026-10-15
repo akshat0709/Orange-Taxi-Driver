@@ -260,43 +260,72 @@ export function InRideChatModal({
       .catch(() => {});
   }, [bookingId, storageKey]);
 
-  // 2. Realtime channel subscription (Active during entire ride booking)
+  // 2. Realtime channel subscription (Active during entire ride booking with authorization)
   useEffect(() => {
     if (!bookingId) return;
 
-    const channel = supabase.channel(`ride-chat-${bookingId}`, {
-      config: { broadcast: { self: false, ack: true } },
-    });
+    let isCancelled = false;
+    let channel: any = null;
 
-    channel
-      .on('broadcast', { event: 'chat_message' }, (payload) => {
-        if (payload?.payload) {
-          mergeIncomingMessages([payload.payload]);
-        }
-      })
-      .on('broadcast', { event: 'request_chat_history' }, () => {
-        // If driver web requests history, send our current messages list
-        if (messagesRef.current.length > 0 && channelRef.current) {
-          channelRef.current
-            .send({
-              type: 'broadcast',
-              event: 'sync_chat_history',
-              payload: { messages: messagesRef.current },
-            })
-            .catch(() => {});
-        }
-      })
-      .on('broadcast', { event: 'sync_chat_history' }, (payload) => {
-        if (payload?.payload?.messages) {
-          mergeIncomingMessages(payload.payload.messages);
-        }
-      })
-      .subscribe();
+    async function setupAuthorizedChat() {
+      // 1. Verify authenticated session
+      const { data: authData } = await supabase.auth.getSession();
+      if (isCancelled || !authData?.session?.user) {
+        return;
+      }
 
-    channelRef.current = channel;
+      // 2. Verify caller is authorized for this booking
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingId);
+      if (isUuid) {
+        const { data: ride, error } = await supabase
+          .from('bookings')
+          .select('id, driver_id, customer_id')
+          .eq('id', bookingId)
+          .maybeSingle();
+
+        if (isCancelled || error || !ride) {
+          return;
+        }
+      }
+
+      channel = supabase.channel(`ride-chat-${bookingId}`, {
+        config: { broadcast: { self: false, ack: true } },
+      });
+
+      channel
+        .on('broadcast', { event: 'chat_message' }, (payload: any) => {
+          if (payload?.payload) {
+            mergeIncomingMessages([payload.payload]);
+          }
+        })
+        .on('broadcast', { event: 'request_chat_history' }, () => {
+          if (messagesRef.current.length > 0 && channelRef.current) {
+            channelRef.current
+              .send({
+                type: 'broadcast',
+                event: 'sync_chat_history',
+                payload: { messages: messagesRef.current },
+              })
+              .catch(() => {});
+          }
+        })
+        .on('broadcast', { event: 'sync_chat_history' }, (payload: any) => {
+          if (payload?.payload?.messages) {
+            mergeIncomingMessages(payload.payload.messages);
+          }
+        })
+        .subscribe();
+
+      channelRef.current = channel;
+    }
+
+    setupAuthorizedChat();
 
     return () => {
-      supabase.removeChannel(channel);
+      isCancelled = true;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [bookingId]);
 
