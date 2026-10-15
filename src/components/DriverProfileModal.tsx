@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -10,7 +10,11 @@ import {
   Switch,
   Linking,
   Alert,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { Driver } from '../types';
 import { supabase } from '../lib/supabase';
 
@@ -35,6 +39,41 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
 }) => {
   const [audioAlerts, setAudioAlerts] = useState(true);
   const [navApp, setNavApp] = useState<'google' | 'apple'>('google');
+
+  const [upiId, setUpiId] = useState('');
+  const [bankAccount, setBankAccount] = useState('');
+  const [ifscCode, setIfscCode] = useState('');
+  const [savingPayout, setSavingPayout] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('@orange_driver_payout').then((data) => {
+      if (data) {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.upiId) setUpiId(parsed.upiId);
+          if (parsed.bankAccount) setBankAccount(parsed.bankAccount);
+          if (parsed.ifscCode) setIfscCode(parsed.ifscCode);
+        } catch {}
+      }
+    });
+  }, []);
+
+  async function handleSavePayout() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSavingPayout(true);
+    try {
+      const payoutData = { upiId, bankAccount, ifscCode, updatedAt: new Date().toISOString() };
+      await AsyncStorage.setItem('@orange_driver_payout', JSON.stringify(payoutData));
+      Alert.alert(
+        'Settlement Saved',
+        'Your bank settlement details have been updated. Automated daily payouts will be credited to this account.'
+      );
+    } catch {
+      Alert.alert('Error', 'Could not save payout details.');
+    } finally {
+      setSavingPayout(false);
+    }
+  }
 
   const handleCallSupport = () => {
     Linking.openURL('tel:+9118001234567').catch(() => {
@@ -224,6 +263,60 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
                 </TouchableOpacity>
               </View>
             </View>
+          </View>
+
+          {/* Bank & UPI Settlement Payout */}
+          <View style={[styles.sectionCard, isLight && styles.cardLight]}>
+            <Text style={[styles.sectionTitle, isLight && styles.textDark]}>🏦 Payout & Daily Settlement</Text>
+            <Text style={styles.payoutSubtitle}>Configure your UPI VPA or Bank Account for automated daily trip payouts.</Text>
+
+            <View style={{ marginTop: 12 }}>
+              <Text style={[styles.payoutLabel, isLight && styles.textDark]}>UPI ID (GPay / PhonePe / Paytm)</Text>
+              <TextInput
+                style={[styles.payoutInput, isLight && styles.payoutInputLight]}
+                placeholder="e.g. driver@okhdfcbank"
+                placeholderTextColor={isLight ? '#94A3B8' : '#64748B'}
+                value={upiId}
+                onChangeText={setUpiId}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={{ marginTop: 10 }}>
+              <Text style={[styles.payoutLabel, isLight && styles.textDark]}>Bank Account Number</Text>
+              <TextInput
+                style={[styles.payoutInput, isLight && styles.payoutInputLight]}
+                placeholder="e.g. 50100234567890"
+                placeholderTextColor={isLight ? '#94A3B8' : '#64748B'}
+                value={bankAccount}
+                onChangeText={setBankAccount}
+                keyboardType="number-pad"
+              />
+            </View>
+
+            <View style={{ marginTop: 10 }}>
+              <Text style={[styles.payoutLabel, isLight && styles.textDark]}>Bank IFSC Code</Text>
+              <TextInput
+                style={[styles.payoutInput, isLight && styles.payoutInputLight]}
+                placeholder="e.g. HDFC0001234"
+                placeholderTextColor={isLight ? '#94A3B8' : '#64748B'}
+                value={ifscCode}
+                onChangeText={(t) => setIfscCode(t.toUpperCase())}
+                autoCapitalize="characters"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.savePayoutBtn}
+              disabled={savingPayout}
+              onPress={handleSavePayout}
+            >
+              {savingPayout ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.savePayoutBtnText}>SAVE SETTLEMENT DETAILS</Text>
+              )}
+            </TouchableOpacity>
           </View>
 
           {/* Support Hotline CTA */}
@@ -646,6 +739,48 @@ const styles = StyleSheet.create({
     color: '#475569',
     fontSize: 11,
     textAlign: 'center',
+  },
+  payoutSubtitle: {
+    color: '#94A3B8',
+    fontSize: 12,
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  payoutLabel: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 6,
+    letterSpacing: 0.3,
+  },
+  payoutInput: {
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    color: '#FFFFFF',
+    fontSize: 13,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  payoutInputLight: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    color: '#0F172A',
+  },
+  savePayoutBtn: {
+    backgroundColor: '#10B981',
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+  },
+  savePayoutBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   containerLight: { backgroundColor: '#F8FAFC' },
   headerLight: { backgroundColor: '#FFFFFF', borderBottomColor: '#E2E8F0' },
