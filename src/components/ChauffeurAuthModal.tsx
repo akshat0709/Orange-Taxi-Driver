@@ -132,7 +132,9 @@ const handleAadhaarChange = (text: string) => {
     }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: 'https://orange-taxi.com/login?mode=reset',
+      });
       if (error) throw error;
       Alert.alert('Reset Email Sent', 'Please check your email inbox for password reset instructions.');
     } catch (e: any) {
