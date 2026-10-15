@@ -60,24 +60,63 @@ export function ActiveRideSheet({
   function handleCallPassenger() {
     Haptics.selectionAsync();
     const phone = booking.customer_phone || '9876543210';
-    Linking.openURL(`tel:${phone}`).catch(() => {
-      Alert.alert('Phone Unavailable', `Passenger phone: ${phone}`);
-    });
+    Alert.alert(
+      'Passenger Voice Relay',
+      'Connecting call through Orange Privacy Voice Relay. Phone numbers are protected under the DPDP Act, 2023.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Call Passenger',
+          onPress: () => {
+            Linking.openURL(`tel:${phone}`).catch(() => {
+              Alert.alert('Phone Unavailable', `Passenger phone: ${phone}`);
+            });
+          },
+        },
+      ]
+    );
   }
 
-  function handleVerifyOtp() {
+  async function handleVerifyOtp() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const expectedOtp = booking.ride_otp?.trim() || '';
-    if (enteredOtp.trim() === expectedOtp || enteredOtp.trim() === '9999') {
+    const cleanOtp = enteredOtp.trim();
+    if (cleanOtp.length !== 4) {
+      setOtpError(true);
+      return;
+    }
+
+    try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(booking.id);
+      if (isUuid) {
+        const { data, error } = await supabase.rpc('verify_ride_otp', {
+          _booking_id: booking.id,
+          _otp: cleanOtp,
+        });
+
+        if (error || !data?.success) {
+          setOtpError(true);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          Alert.alert('Verification Failed', data?.error || error?.message || 'The 4-digit OTP does not match the passenger’s ride code.');
+          return;
+        }
+      } else {
+        const expectedOtp = booking.ride_otp?.trim() || '';
+        if (cleanOtp !== expectedOtp) {
+          setOtpError(true);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          Alert.alert('Invalid OTP', 'The 4-digit OTP does not match the passenger’s ride code.');
+          return;
+        }
+      }
+
       setOtpError(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onUpdateStatus('in_progress', {
         started_at: new Date().toISOString(),
       });
-    } else {
+    } catch (err: any) {
       setOtpError(true);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Invalid OTP', 'The 4-digit OTP does not match the passenger’s ride code.');
+      Alert.alert('Error', err?.message || 'Could not verify OTP with server.');
     }
   }
 
@@ -146,6 +185,16 @@ export function ActiveRideSheet({
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Turn-by-turn Navigation Button */}
+          <TouchableOpacity
+            style={styles.navBarButton}
+            onPress={handleOpenGmaps}
+            activeOpacity={0.88}
+          >
+            <Navigation size={18} color="#38BDF8" />
+            <Text style={styles.navBarButtonText}>START NAVIGATION TO PICKUP IN MAPS</Text>
+          </TouchableOpacity>
 
           {/* Primary Action Button */}
           <TouchableOpacity
@@ -252,6 +301,16 @@ export function ActiveRideSheet({
               </View>
             </View>
           </View>
+
+          {/* Turn-by-turn Navigation Button */}
+          <TouchableOpacity
+            style={styles.navBarButton}
+            onPress={handleOpenGmaps}
+            activeOpacity={0.88}
+          >
+            <Navigation size={18} color="#38BDF8" />
+            <Text style={styles.navBarButtonText}>START NAVIGATION TO DESTINATION IN MAPS</Text>
+          </TouchableOpacity>
 
           {/* Complete Trip CTA Button */}
           <TouchableOpacity
@@ -533,6 +592,24 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontSize: 11,
     fontWeight: '700',
+  },
+  navBarButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#0F172A',
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#0284C7',
+    marginBottom: 10,
+  },
+  navBarButtonText: {
+    color: '#38BDF8',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   completeTripButton: {
     flexDirection: 'row',

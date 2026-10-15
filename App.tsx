@@ -39,7 +39,10 @@ import {
   Clock,
   ArrowRight,
   RefreshCw,
+  WifiOff,
+  Coffee,
 } from 'lucide-react-native';
+import NetInfo from '@react-native-community/netinfo';
 
 import { supabase } from './src/lib/supabase';
 import { Driver, Booking, DriverStats } from './src/types';
@@ -149,6 +152,32 @@ export default function App() {
   const [showChatModal, setShowChatModal] = useState(false);
 
   const [theme, setTheme] = useState<'light'|'dark'>('dark');
+  const [isNetworkOffline, setIsNetworkOffline] = useState(false);
+  const [showRestAdvisory, setShowRestAdvisory] = useState(false);
+  const [shiftStartTime, setShiftStartTime] = useState<number>(Date.now());
+
+  // Listen to network connectivity
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsNetworkOffline(state.isConnected === false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Track continuous online duty for fatigue prevention (MV Aggregator Guidelines)
+  useEffect(() => {
+    if (!isOnline) {
+      setShiftStartTime(Date.now());
+      return;
+    }
+    const interval = setInterval(() => {
+      const elapsedHours = (Date.now() - shiftStartTime) / (1000 * 60 * 60);
+      if (elapsedHours >= 8) {
+        setShowRestAdvisory(true);
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [isOnline, shiftStartTime]);
 
   // Load theme on mount
   useEffect(() => {
@@ -1020,6 +1049,14 @@ export default function App() {
 
         {/* Top Header Controls Overlay */}
         <SafeAreaView edges={['top']} style={styles.topSafeArea}>
+          {isNetworkOffline && (
+            <View style={styles.offlineBanner}>
+              <WifiOff size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.offlineBannerText}>
+                Cellular Signal Lost · Reconnecting to Dispatch Network...
+              </Text>
+            </View>
+          )}
           <View style={styles.topHeaderBar}>
             {/* Online / Offline Switch Pill */}
             <TouchableOpacity
@@ -1243,6 +1280,45 @@ export default function App() {
           onToggleTheme={handleToggleTheme}
         />
 
+        {/* Driver Fatigue Rest Advisory Modal (MV Aggregator Guidelines 2025) */}
+        <Modal visible={showRestAdvisory} animationType="slide" transparent>
+          <View style={styles.advisoryOverlay}>
+            <View style={[styles.advisoryCard, theme === 'light' && styles.advisoryCardLight]}>
+              <View style={styles.advisoryIconWrap}>
+                <Coffee size={32} color="#F97316" />
+              </View>
+              <Text style={[styles.advisoryTitle, theme === 'light' && { color: '#0F172A' }]}>
+                Chauffeur Safety Rest Advisory
+              </Text>
+              <Text style={[styles.advisoryDesc, theme === 'light' && { color: '#64748B' }]}>
+                You have been online for over 8 continuous hours. Under the Motor Vehicle Aggregator Guidelines, chauffeurs must take a 30-minute rest break to prevent driving fatigue and ensure road safety.
+              </Text>
+              <TouchableOpacity
+                style={styles.advisoryRestBtn}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setIsOnline(false);
+                  setShowRestAdvisory(false);
+                  setShiftStartTime(Date.now());
+                }}
+              >
+                <Text style={styles.advisoryRestBtnText}>GO OFFLINE & TAKE A BREAK</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ marginTop: 14, paddingVertical: 8 }}
+                onPress={() => {
+                  setShowRestAdvisory(false);
+                  setShiftStartTime(Date.now());
+                }}
+              >
+                <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', fontWeight: '600' }}>
+                  Dismiss (I have already rested)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
       </View>
     </SafeAreaProvider>
   );
@@ -1255,6 +1331,80 @@ const styles = StyleSheet.create({
   },
   containerLight: {
     backgroundColor: '#FFFFFF',
+  },
+  offlineBanner: {
+    backgroundColor: '#DC2626',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+  },
+  offlineBannerText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  advisoryOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  advisoryCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  advisoryCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+  },
+  advisoryIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(249, 115, 22, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  advisoryTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  advisoryDesc: {
+    color: '#94A3B8',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  advisoryRestBtn: {
+    backgroundColor: '#F97316',
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  advisoryRestBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   loadingContainer: {
     flex: 1,
