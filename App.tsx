@@ -168,6 +168,31 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Tunnel Mode / Offline Action Queue Replay
+  useEffect(() => {
+    if (isNetworkOffline) return;
+
+    const replayQueue = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('@orange_offline_action_queue');
+        if (!stored) return;
+        const queue: Array<{ bookingId: string; updates: any }> = JSON.parse(stored);
+        if (!Array.isArray(queue) || queue.length === 0) return;
+
+        for (const item of queue) {
+          try {
+            await supabase.from('bookings').update(item.updates).eq('id', item.bookingId);
+          } catch (e) {}
+        }
+        await AsyncStorage.removeItem('@orange_offline_action_queue');
+      } catch (e) {}
+    };
+
+    replayQueue();
+    const interval = setInterval(replayQueue, 8000);
+    return () => clearInterval(interval);
+  }, [isNetworkOffline]);
+
   // Track continuous online duty for fatigue prevention (MV Aggregator Guidelines)
   useEffect(() => {
     if (!isOnline) {
@@ -990,44 +1015,77 @@ export default function App() {
       ...extraUpdates,
     };
 
+    const enqueueOffline = async (bookingId: string, upd: Partial<Booking>) => {
+      try {
+        const stored = await AsyncStorage.getItem('@orange_offline_action_queue');
+        const queue = stored ? JSON.parse(stored) : [];
+        queue.push({ bookingId, updates: upd, timestamp: Date.now() });
+        await AsyncStorage.setItem('@orange_offline_action_queue', JSON.stringify(queue));
+      } catch (e) {}
+    };
+
     if (newStatus === 'arrived') {
       updates.arrived_at = new Date().toISOString();
-      await supabase.from('bookings').update(updates).eq('id', activeBooking.id);
+      if (isNetworkOffline) {
+        await enqueueOffline(activeBooking.id, updates);
+      } else {
+        try {
+          await supabase.from('bookings').update(updates).eq('id', activeBooking.id);
+        } catch {
+          await enqueueOffline(activeBooking.id, updates);
+        }
+      }
     } else if (newStatus === 'in_progress') {
       updates.started_at = new Date().toISOString();
-      await supabase.from('bookings').update(updates).eq('id', activeBooking.id);
+      if (isNetworkOffline) {
+        await enqueueOffline(activeBooking.id, updates);
+      } else {
+        try {
+          await supabase.from('bookings').update(updates).eq('id', activeBooking.id);
+        } catch {
+          await enqueueOffline(activeBooking.id, updates);
+        }
+      }
     } else if (newStatus === 'completed') {
       const finalFare = round2(activeBooking.final_fare || activeBooking.estimated_fare);
       updates.completed_at = new Date().toISOString();
       updates.final_fare = finalFare;
       updates.payment_status = 'completed';
 
-      // Deduct from customer wallet if payment method is wallet
-      if (activeBooking.payment_method === 'wallet' && activeBooking.customer_id) {
-        try {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('wallet_balance')
-            .eq('id', activeBooking.customer_id)
-            .single();
-          if (profile) {
-            const currentBal = profile.wallet_balance || 0;
-            await supabase
+      if (isNetworkOffline) {
+        await enqueueOffline(activeBooking.id, updates);
+      } else {
+        // Deduct from customer wallet if payment method is wallet
+        if (activeBooking.payment_method === 'wallet' && activeBooking.customer_id) {
+          try {
+            const { data: profile } = await supabase
               .from('profiles')
-              .update({ wallet_balance: Math.max(0, currentBal - finalFare) })
-              .eq('id', activeBooking.customer_id);
+              .select('wallet_balance')
+              .eq('id', activeBooking.customer_id)
+              .single();
+            if (profile) {
+              const currentBal = profile.wallet_balance || 0;
+              await supabase
+                .from('profiles')
+                .update({ wallet_balance: Math.max(0, currentBal - finalFare) })
+                .eq('id', activeBooking.customer_id);
+            }
+          } catch (err) {
+            console.warn('Wallet deduction failed:', err);
           }
-        } catch (err) {
-          console.warn('Wallet deduction failed:', err);
         }
+
+        // Persist directly to Supabase bookings table
+        try {
+          await supabase.from('bookings').update(updates).eq('id', activeBooking.id);
+        } catch {
+          await enqueueOffline(activeBooking.id, updates);
+        }
+
+        // Re-fetch driver's real today stats directly from Supabase
+        const currentDriverId = activeBooking.driver_id || driver?.id;
+        if (currentDriverId) await fetchTodayStats(currentDriverId, driver);
       }
-
-      // Persist directly to Supabase bookings table
-      await supabase.from('bookings').update(updates).eq('id', activeBooking.id);
-
-      // Re-fetch driver's real today stats directly from Supabase
-      const currentDriverId = activeBooking.driver_id || driver?.id;
-      if (currentDriverId) await fetchTodayStats(currentDriverId, driver);
     }
 
     setActiveBooking((prev) => (prev ? { ...prev, ...updates } : null));
@@ -1213,6 +1271,39 @@ export default function App() {
             </View>
           </View>
         </SafeAreaView>
+
+        {/* Offline / Tunnel Mode Indicator */}
+        {isNetworkOffline && (
+          <View style={{
+            position: 'absolute',
+            top: 100,
+            left: 16,
+            right: 16,
+            backgroundColor: '#B45309',
+            borderRadius: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 9,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            zIndex: 9999,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 4,
+            elevation: 8,
+          }}>
+            <WifiOff size={18} color="#FFFFFF" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
+                Offline Tunnel Mode Active
+              </Text>
+              <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 10 }}>
+                Status updates queue locally and sync automatically when signal returns.
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Idle Floating Bar when Online & No Active Trip */}
         {isOnline && !activeBooking && (
