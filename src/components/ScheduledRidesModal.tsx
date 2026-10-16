@@ -77,12 +77,25 @@ export function ScheduledRidesModal({
           text: 'Confirm Pre-Accept',
           style: 'default',
           onPress: async () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            await supabase
+            const { data: locked, error } = await supabase
               .from('bookings')
               .update({ driver_id: driverId })
-              .eq('id', ride.id);
-            onClaimScheduledRide(ride);
+              .eq('id', ride.id)
+              .is('driver_id', null)
+              .select('*')
+              .maybeSingle();
+
+            if (error || !locked) {
+              Alert.alert(
+                'Already Claimed',
+                'Another chauffeur just claimed this scheduled departure. Please refresh the list.'
+              );
+              fetchScheduledRides();
+              return;
+            }
+
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            onClaimScheduledRide(locked as Booking);
             onClose();
           },
         },

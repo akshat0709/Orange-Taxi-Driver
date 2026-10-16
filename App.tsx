@@ -126,6 +126,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isPendingApproval, setIsPendingApproval] = useState(false);
+  const isAcceptingRideRef = useRef(false);
 
   // Online / Offline & GPS
   const [isOnline, setIsOnline] = useState(true);
@@ -794,6 +795,23 @@ export default function App() {
               setActiveBooking(null);
             }
           }
+
+          // If incoming booking was accepted by another driver in real-time
+          if (
+            incomingBooking &&
+            newBooking.id === incomingBooking.id &&
+            newBooking.status === 'accepted' &&
+            newBooking.driver_id &&
+            newBooking.driver_id !== driver?.id
+          ) {
+            await soundService.stopDispatchAlert();
+            setIncomingBooking(null);
+            setDeclinedBookingIds((prev) => [...prev, newBooking.id]);
+            Alert.alert(
+              'Ride Taken',
+              'Another chauffeur accepted this request. Returning to dispatch radar...'
+            );
+          }
           
           // Update active booking live (e.g. if passenger pays mid-ride)
           if (activeBooking && newBooking.id === activeBooking.id && newBooking.status !== 'cancelled') {
@@ -845,54 +863,93 @@ export default function App() {
     }
   };
 
-  // Accept Ride Handler in Supabase
-  const handleAcceptRide = async (booking: Booking) => {
+  const handleRideAlreadyClaimed = async (bookingId: string) => {
+    await soundService.stopDispatchAlert();
+    setIncomingBooking(null);
+    setDeclinedBookingIds((prev) => [...prev, bookingId]);
     try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     } catch {}
-    await soundService.playAcceptChime();
+    Alert.alert(
+      'Ride Already Claimed',
+      'Another chauffeur accepted this ride just before you. Your console is active and ready for the next dispatch.'
+    );
+  };
 
-    const driverId = driver?.id;
+  // Accept Ride Handler in Supabase with Atomic Concurrency Lock
+  const handleAcceptRide = async (booking: Booking) => {
+    if (isAcceptingRideRef.current) return;
+    isAcceptingRideRef.current = true;
 
-    // Mutate in Supabase database with FK resilience
-    let updatedBookingData: Booking | null = null;
-    const { data, error } = await supabase
-      .from('bookings')
-      .update({
-        status: 'accepted',
-        driver_id: driverId,
-        accepted_at: new Date().toISOString(),
-      })
-      .eq('id', booking.id)
-      .select()
-      .maybeSingle();
+    try {
+      const driverId = driver?.id;
+      if (!driverId) {
+        Alert.alert('Notice', 'Chauffeur profile not ready. Please try again.');
+        return;
+      }
 
-    if (error && error.code === '23503') {
-      // If driver_id foreign key constraint triggers, update status directly so the trip proceeds seamlessly
-      const { data: fallbackData } = await supabase
+      // Atomic conditional update: only locks if status is STILL 'searching' and unassigned
+      const { data, error } = await supabase
         .from('bookings')
         .update({
           status: 'accepted',
+          driver_id: driverId,
           accepted_at: new Date().toISOString(),
         })
         .eq('id', booking.id)
+        .eq('status', 'searching')
+        .is('driver_id', null)
         .select()
         .maybeSingle();
 
-      updatedBookingData = fallbackData as Booking;
-    } else {
-      updatedBookingData = data as Booking;
+      if (error && error.code === '23503') {
+        // FK edge-case fallback with the same atomic row-locking constraint
+        const { data: fallbackData } = await supabase
+          .from('bookings')
+          .update({
+            status: 'accepted',
+            accepted_at: new Date().toISOString(),
+          })
+          .eq('id', booking.id)
+          .eq('status', 'searching')
+          .is('driver_id', null)
+          .select()
+          .maybeSingle();
+
+        if (!fallbackData) {
+          await handleRideAlreadyClaimed(booking.id);
+          return;
+        }
+
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch {}
+        await soundService.playAcceptChime();
+        setActiveBooking(fallbackData as Booking);
+        setIncomingBooking(null);
+        return;
+      }
+
+      if (!data) {
+        // 0 rows updated: another chauffeur acquired the lock first!
+        await handleRideAlreadyClaimed(booking.id);
+        return;
+      }
+
+      // Lock successfully acquired! Sole winner.
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {}
+      await soundService.playAcceptChime();
+
+      setActiveBooking(data as Booking);
+      setIncomingBooking(null);
+    } catch (err: any) {
+      console.warn('Error accepting ride:', err);
+      Alert.alert('Notice', 'Unable to accept ride. Please check network.');
+    } finally {
+      isAcceptingRideRef.current = false;
     }
-
-    const accepted: Booking = updatedBookingData || {
-      ...booking,
-      status: 'accepted',
-      driver_id: driverId,
-      accepted_at: new Date().toISOString(),
-    };
-
-    setActiveBooking(accepted);
-    setIncomingBooking(null);
   };
 
   // Decline Ride Handler
