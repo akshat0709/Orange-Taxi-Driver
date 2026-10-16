@@ -123,6 +123,10 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const showSplashRef = useRef(true);
   const [driver, setDriver] = useState<Driver | null>(null);
+  const driverRef = useRef<Driver | null>(null);
+  useEffect(() => {
+    driverRef.current = driver;
+  }, [driver]);
   const [authLoading, setAuthLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isPendingApproval, setIsPendingApproval] = useState(false);
@@ -344,31 +348,30 @@ export default function App() {
           } catch {}
         }
 
+        // 1. Immediately restore cached driver from storage
+        const saved = await AsyncStorage.getItem('orange_taxi_driver');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed && parsed.id) {
+              setDriver(parsed);
+              driverRef.current = parsed;
+              setIsOnline(parsed.is_online ?? true);
+              fetchTodayStats(parsed.id, parsed).catch(() => {});
+            }
+          } catch {}
+        }
+
+        // 2. Refresh active session from Supabase in background
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           await loadDriverFromSupabaseUser(session.user);
-        } else {
-          // Check cached driver
-          const saved = await AsyncStorage.getItem('orange_taxi_driver');
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            setDriver(parsed);
-            setIsOnline(parsed.is_online ?? true);
-            await fetchTodayStats(parsed.id, parsed);
-          } else {
-            // Driver not authenticated - will open after splash finishes
-            setDriver(null);
-            if (!showSplashRef.current) {
-              setShowAuthModal(true);
-            }
-          }
+        } else if (!saved) {
+          setDriver(null);
+          driverRef.current = null;
         }
       } catch (err) {
         console.warn('Failed initializing Supabase session:', err);
-        setDriver(null);
-        if (!showSplashRef.current) {
-          setShowAuthModal(true);
-        }
       } finally {
         setAuthLoading(false);
       }
@@ -382,6 +385,8 @@ export default function App() {
         await loadDriverFromSupabaseUser(session.user);
       } else if (event === 'SIGNED_OUT') {
         setDriver(null);
+        driverRef.current = null;
+        await AsyncStorage.removeItem('orange_taxi_driver');
         setActiveBooking(null);
         setShowAuthModal(true);
       }
@@ -392,10 +397,37 @@ export default function App() {
     };
   }, []);
 
-  const handleSplashFinish = () => {
+  const handleSplashFinish = async () => {
     showSplashRef.current = false;
     setShowSplash(false);
-    if (!driver) {
+
+    let activeDriver = driverRef.current;
+    if (!activeDriver) {
+      try {
+        const saved = await AsyncStorage.getItem('orange_taxi_driver');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.id) {
+            activeDriver = parsed;
+            setDriver(parsed);
+            driverRef.current = parsed;
+          }
+        }
+      } catch {}
+    }
+
+    if (!activeDriver) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await loadDriverFromSupabaseUser(session.user);
+          return;
+        }
+      } catch {}
+    }
+
+    // Only show auth modal if chauffeur is truly not authenticated
+    if (!activeDriver) {
       setShowAuthModal(true);
     }
   };
@@ -494,6 +526,7 @@ export default function App() {
       }
 
       setDriver(driverProfile);
+      driverRef.current = driverProfile;
       setIsPendingApproval(false);
       setIsOnline(driverProfile.is_online);
       setShowAuthModal(false);
@@ -1447,8 +1480,10 @@ export default function App() {
           visible={showAuthModal}
           onSuccess={async (authenticatedDriver) => {
             setDriver(authenticatedDriver);
+            driverRef.current = authenticatedDriver;
             setIsOnline(true);
             setShowAuthModal(false);
+            await AsyncStorage.setItem('orange_taxi_driver', JSON.stringify(authenticatedDriver));
             await AsyncStorage.setItem('@orange_online_start_time', Date.now().toString());
             await fetchTodayStats(authenticatedDriver.id, authenticatedDriver);
           }}

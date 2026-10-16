@@ -33,6 +33,11 @@ export const CoolCarSplashScreen: React.FC<CoolCarSplashScreenProps> = ({
   onFinish,
   appType = 'driver',
 }) => {
+  const onFinishRef = useRef(onFinish);
+  useEffect(() => {
+    onFinishRef.current = onFinish;
+  }, [onFinish]);
+
   // Animation values
   const carTranslateX = useRef(new Animated.Value(-280)).current;
   const speedStreakOpacity = useRef(new Animated.Value(0)).current;
@@ -131,7 +136,9 @@ export const CoolCarSplashScreen: React.FC<CoolCarSplashScreenProps> = ({
     carSequence.start(({ finished }) => {
       if (finished) {
         roadLoop.stop();
-        onFinish();
+        if (onFinishRef.current) {
+          onFinishRef.current();
+        }
       }
     });
 
@@ -151,7 +158,9 @@ export const CoolCarSplashScreen: React.FC<CoolCarSplashScreenProps> = ({
       duration: 200,
       useNativeDriver: true,
     }).start(() => {
-      onFinish();
+      if (onFinishRef.current) {
+        onFinishRef.current();
+      }
     });
   };
 
