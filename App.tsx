@@ -54,6 +54,7 @@ import { DriverEarningsModal } from './src/components/DriverEarningsModal';
 import { DriverProfileModal } from './src/components/DriverProfileModal';
 import { InRideChatModal } from './src/components/InRideChatModal';
 import { ChauffeurAuthModal } from './src/components/ChauffeurAuthModal';
+import { CoolCarSplashScreen } from './src/components/CoolCarSplashScreen';
 import { formatRupees, round2 } from './src/lib/formatters';
 import { soundService } from './src/lib/soundService';
 import { resolveBookingTargetCoords } from './src/lib/locationResolver';
@@ -118,7 +119,9 @@ function getDistanceInKm(lat1: number, lon1: number, lat2: number, lon2: number)
 }
 
 export default function App() {
-  // Authentication & Driver state
+  // Splash & Authentication state
+  const [showSplash, setShowSplash] = useState(true);
+  const showSplashRef = useRef(true);
   const [driver, setDriver] = useState<Driver | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -327,13 +330,19 @@ export default function App() {
             setIsOnline(parsed.is_online ?? true);
             await fetchTodayStats(parsed.id, parsed);
           } else {
-            // Prompt chauffeur auth modal
-            setShowAuthModal(true);
+            // Driver not authenticated - will open after splash finishes
+            setDriver(null);
+            if (!showSplashRef.current) {
+              setShowAuthModal(true);
+            }
           }
         }
       } catch (err) {
         console.warn('Failed initializing Supabase session:', err);
-        setDriver(null); setShowAuthModal(true);
+        setDriver(null);
+        if (!showSplashRef.current) {
+          setShowAuthModal(true);
+        }
       } finally {
         setAuthLoading(false);
       }
@@ -356,6 +365,14 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  const handleSplashFinish = () => {
+    showSplashRef.current = false;
+    setShowSplash(false);
+    if (!driver) {
+      setShowAuthModal(true);
+    }
+  };
 
   // Helper: Load driver record and active rides from Supabase
   const loadDriverFromSupabaseUser = async (user: any) => {
@@ -981,6 +998,18 @@ export default function App() {
   };
 
 
+
+  // Cool Car Animated Splash Screen (Renders immediately on startup)
+  if (showSplash) {
+    return (
+      <SafeAreaProvider>
+        <CoolCarSplashScreen
+          appType="driver"
+          onFinish={handleSplashFinish}
+        />
+      </SafeAreaProvider>
+    );
+  }
 
   // Loading State
   if (authLoading) {
