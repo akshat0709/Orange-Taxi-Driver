@@ -58,6 +58,7 @@ import { CoolCarSplashScreen } from './src/components/CoolCarSplashScreen';
 import { formatRupees, round2 } from './src/lib/formatters';
 import { soundService } from './src/lib/soundService';
 import { resolveBookingTargetCoords } from './src/lib/locationResolver';
+import { registerForDriverPushNotificationsAsync, sendDriverLocalNotification } from './src/lib/notificationService';
 
 import * as TaskManager from 'expo-task-manager';
 
@@ -169,6 +170,7 @@ export default function App() {
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsNetworkOffline(state.isConnected === false);
     });
+    registerForDriverPushNotificationsAsync().catch(() => {});
     return () => unsubscribe();
   }, []);
 
@@ -726,6 +728,13 @@ export default function App() {
     // Play energetic alert chime immediately
     await soundService.playDispatchAlert();
     setIncomingBooking(enrichedBooking);
+
+    // Send local push notification
+    sendDriverLocalNotification(
+      '⚡ New Passenger Ride Request!',
+      `${enrichedBooking.pickup_area} ➔ ${enrichedBooking.drop_area} (₹${formatRupees(enrichedBooking.estimated_fare)})`,
+      { bookingId: enrichedBooking.id }
+    );
   };
 
   // 4. Supabase Realtime Channel & Polling Fallback for Incoming Passenger Dispatches
@@ -985,6 +994,11 @@ export default function App() {
         await soundService.playAcceptChime();
         setActiveBooking(fallbackData as Booking);
         setIncomingBooking(null);
+        sendDriverLocalNotification(
+          '🚗 Ride Confirmed!',
+          `Proceed to pickup bay: ${booking.pickup_area}`,
+          { bookingId: booking.id }
+        );
         return;
       }
 
@@ -1002,6 +1016,11 @@ export default function App() {
 
       setActiveBooking(data as Booking);
       setIncomingBooking(null);
+      sendDriverLocalNotification(
+        '🚗 Ride Confirmed!',
+        `Proceed to pickup bay: ${booking.pickup_area}`,
+        { bookingId: booking.id }
+      );
     } catch (err: any) {
       console.warn('Error accepting ride:', err);
       Alert.alert('Notice', 'Unable to accept ride. Please check network.');

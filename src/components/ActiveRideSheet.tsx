@@ -23,10 +23,49 @@ import {
   Shield,
   Banknote,
   ExternalLink,
+  Sparkles,
+  Music2,
+  Briefcase,
+  MonitorPlay,
+  Droplets,
 } from 'lucide-react-native';
 import { Booking } from '../types';
 import { formatRupees } from '../lib/formatters';
 import { openGoogleMaps, resolveBookingTargetCoords } from '../lib/locationResolver';
+
+export interface CabinPreferences {
+  temperature: '19°C' | '21°C' | '23°C';
+  music: 'lofi' | 'bollywood' | 'jazz' | 'quiet';
+  luggageHelp: boolean;
+  noHonking: boolean;
+  screenOn: boolean;
+  waterBottle: boolean;
+}
+
+export function parseCabinPreferences(booking: Booking): CabinPreferences {
+  if (booking.pickup_address && booking.pickup_address.includes('CABIN:')) {
+    try {
+      const jsonStr = booking.pickup_address.split('CABIN:')[1].trim();
+      const parsed = JSON.parse(jsonStr);
+      return {
+        temperature: parsed.temperature || '21°C',
+        music: parsed.music || 'lofi',
+        luggageHelp: Boolean(parsed.luggageHelp),
+        noHonking: parsed.noHonking !== undefined ? Boolean(parsed.noHonking) : true,
+        screenOn: parsed.screenOn !== undefined ? Boolean(parsed.screenOn) : true,
+        waterBottle: parsed.waterBottle !== undefined ? Boolean(parsed.waterBottle) : true,
+      };
+    } catch {}
+  }
+  return {
+    temperature: '21°C',
+    music: 'lofi',
+    luggageHelp: false,
+    noHonking: true,
+    screenOn: true,
+    waterBottle: true,
+  };
+}
 
 interface ActiveRideSheetProps {
   booking: Booking;
@@ -49,6 +88,7 @@ export function ActiveRideSheet({
   const [cashConfirmed, setCashConfirmed] = useState(false);
 
   const status = booking.status;
+  const cabin = parseCabinPreferences(booking);
 
   function handleOpenGmaps() {
     const coords = resolveBookingTargetCoords(booking);
@@ -155,6 +195,71 @@ export function ActiveRideSheet({
       <View style={styles.handleWrap}>
         <View style={[styles.handleBar, isDark && styles.handleBarDark]} />
       </View>
+
+      {/* Mahindra BE.6 Guest Cabin Preferences Banner */}
+      {status !== 'completed' && (
+        <View style={[styles.cabinCard, isDark && styles.cabinCardDark]}>
+          <View style={styles.cabinHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Sparkles size={13} color="#F97316" />
+              <Text style={[styles.cabinCardTitle, isDark && styles.textWhite]}>
+                MAHINDRA BE.6 GUEST CABIN PREFERENCES
+              </Text>
+            </View>
+            <View style={styles.be6Pill}>
+              <Text style={styles.be6PillText}>EV LUXURY</Text>
+            </View>
+          </View>
+
+          <View style={styles.cabinBadgesRow}>
+            {/* Climate Badge */}
+            <View style={[styles.cabinBadge, { backgroundColor: 'rgba(56, 189, 248, 0.12)', borderColor: '#38BDF8' }]}>
+              <Snowflake size={12} color="#38BDF8" />
+              <Text style={[styles.cabinBadgeText, { color: '#38BDF8' }]}>Pre-Cool: {cabin.temperature}</Text>
+            </View>
+
+            {/* Acoustic Mood Badge */}
+            <View style={[styles.cabinBadge, { backgroundColor: 'rgba(249, 115, 22, 0.12)', borderColor: '#F97316' }]}>
+              <Music2 size={12} color="#F97316" />
+              <Text style={[styles.cabinBadgeText, { color: '#F97316' }]}>
+                {cabin.music === 'lofi' ? 'Lo-Fi Lounge' : cabin.music === 'bollywood' ? 'Bollywood Gold' : cabin.music === 'jazz' ? 'Smooth Jazz' : 'Quiet Cabin'}
+              </Text>
+            </View>
+
+            {/* Quiet Journey / No Honking */}
+            {cabin.noHonking && (
+              <View style={[styles.cabinBadge, { backgroundColor: 'rgba(16, 185, 129, 0.12)', borderColor: '#10B981' }]}>
+                <VolumeX size={12} color="#10B981" />
+                <Text style={[styles.cabinBadgeText, { color: '#10B981' }]}>Do Not Honk</Text>
+              </View>
+            )}
+
+            {/* Luggage Assistance */}
+            {cabin.luggageHelp && (
+              <View style={[styles.cabinBadge, { backgroundColor: 'rgba(168, 85, 247, 0.12)', borderColor: '#A855F7' }]}>
+                <Briefcase size={12} color="#A855F7" />
+                <Text style={[styles.cabinBadgeText, { color: '#A855F7' }]}>Luggage Assist</Text>
+              </View>
+            )}
+
+            {/* HD Screen */}
+            {cabin.screenOn && (
+              <View style={[styles.cabinBadge, { backgroundColor: 'rgba(236, 72, 153, 0.12)', borderColor: '#EC4899' }]}>
+                <MonitorPlay size={12} color="#EC4899" />
+                <Text style={[styles.cabinBadgeText, { color: '#EC4899' }]}>In-Seat Screen On</Text>
+              </View>
+            )}
+
+            {/* Water Bottle */}
+            {cabin.waterBottle && (
+              <View style={[styles.cabinBadge, { backgroundColor: 'rgba(6, 182, 212, 0.12)', borderColor: '#06B6D4' }]}>
+                <Droplets size={12} color="#06B6D4" />
+                <Text style={[styles.cabinBadgeText, { color: '#06B6D4' }]}>Water Ready</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
 
       {/* Stage 1: En Route to Pickup */}
       {status === 'accepted' && (
@@ -292,11 +397,13 @@ export function ActiveRideSheet({
               <View style={styles.comfortPills}>
                 <View style={styles.comfortBadge}>
                   <Snowflake size={12} color="#0284C7" />
-                  <Text style={styles.comfortBadgeText}>22°C</Text>
+                  <Text style={styles.comfortBadgeText}>{cabin.temperature}</Text>
                 </View>
                 <View style={styles.comfortBadge}>
                   <VolumeX size={12} color="#7C3AED" />
-                  <Text style={styles.comfortBadgeText}>Quiet</Text>
+                  <Text style={styles.comfortBadgeText}>
+                    {cabin.music === 'quiet' ? 'Quiet' : (cabin.music.charAt(0).toUpperCase() + cabin.music.slice(1))}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -725,5 +832,59 @@ const styles = StyleSheet.create({
   },
   textWhite: {
     color: '#FFFFFF',
+  },
+  cabinCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 12,
+  },
+  cabinCardDark: {
+    backgroundColor: '#1E293B',
+    borderColor: '#334155',
+  },
+  cabinHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  cabinCardTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: 0.5,
+  },
+  be6Pill: {
+    backgroundColor: 'rgba(249, 115, 22, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  be6PillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#F97316',
+    textTransform: 'uppercase',
+  },
+  cabinBadgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  cabinBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  cabinBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });
