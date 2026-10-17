@@ -32,6 +32,7 @@ import {
 import { Booking } from '../types';
 import { formatRupees } from '../lib/formatters';
 import { openGoogleMaps, resolveBookingTargetCoords } from '../lib/locationResolver';
+import { clearReturnToAppNotification } from '../lib/notificationService';
 
 export interface CabinPreferences {
   temperature: '19°C' | '21°C' | '23°C';
@@ -126,27 +127,64 @@ export function ActiveRideSheet({
     }
 
     try {
+      let verified = false;
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(booking.id);
-      if (isUuid) {
-        const { data, error } = await supabase.rpc('verify_ride_otp', {
-          _booking_id: booking.id,
-          _otp: cleanOtp,
-        });
 
-        if (error || !data?.success) {
-          setOtpError(true);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          Alert.alert('Verification Failed', data?.error || error?.message || 'The 4-digit OTP does not match the passenger’s ride code.');
-          return;
+      if (isUuid) {
+        try {
+          const { data, error } = await supabase.rpc('verify_ride_otp', {
+            _booking_id: booking.id,
+            _otp: cleanOtp,
+          });
+
+          if (!error && data?.success) {
+            verified = true;
+          } else if (
+            error &&
+            (error.message?.includes('schema cache') ||
+              error.message?.includes('not find') ||
+              error.code === 'PGRST202')
+          ) {
+            // Function missing in PostgREST schema cache - fallback to direct booking verification
+            const expected = booking.ride_otp?.trim() || '';
+            if (expected && cleanOtp === expected) {
+              verified = true;
+            } else {
+              const { data: bData } = await supabase
+                .from('bookings')
+                .select('ride_otp')
+                .eq('id', booking.id)
+                .maybeSingle();
+              if (bData?.ride_otp?.trim() === cleanOtp) {
+                verified = true;
+              }
+            }
+          } else {
+            setOtpError(true);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            Alert.alert(
+              'Verification Failed',
+              data?.error || error?.message || 'The 4-digit OTP does not match the passenger’s ride code.'
+            );
+            return;
+          }
+        } catch {
+          if (booking.ride_otp?.trim() === cleanOtp) {
+            verified = true;
+          }
         }
       } else {
         const expectedOtp = booking.ride_otp?.trim() || '';
-        if (cleanOtp !== expectedOtp) {
-          setOtpError(true);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          Alert.alert('Invalid OTP', 'The 4-digit OTP does not match the passenger’s ride code.');
-          return;
+        if (cleanOtp === expectedOtp) {
+          verified = true;
         }
+      }
+
+      if (!verified) {
+        setOtpError(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert('Invalid OTP', 'The 4-digit OTP does not match the passenger’s ride code.');
+        return;
       }
 
       setOtpError(false);
@@ -178,6 +216,7 @@ export function ActiveRideSheet({
           style: 'default',
           onPress: () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            clearReturnToAppNotification().catch(() => {});
             onUpdateStatus('completed', {
               completed_at: new Date().toISOString(),
               final_fare: booking.estimated_fare,

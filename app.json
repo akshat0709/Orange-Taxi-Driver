@@ -2,6 +2,7 @@
   "expo": {
     "name": "Orange Chauffeur",
     "slug": "orange-taxi-driver",
+    "scheme": "orangetaxidriver",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

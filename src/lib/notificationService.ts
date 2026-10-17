@@ -72,3 +72,42 @@ export async function sendDriverLocalNotification(
     console.warn('Could not schedule driver local notification:', e);
   }
 }
+
+export async function showReturnToAppNotification(targetLabel?: string) {
+  try {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('orange-driver-active-trip', {
+        name: 'Orange Chauffeur Active Navigation',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 200],
+        lightColor: '#F97316',
+        enableVibrate: false,
+        showBadge: true,
+      });
+    }
+
+    await Notifications.scheduleNotificationAsync({
+      identifier: 'orange-taxi-active-trip-return',
+      content: {
+        title: '🚖 Return to Orange Chauffeur',
+        body: targetLabel ? `Navigating to ${targetLabel}. Tap to open app.` : 'Active ride in progress. Tap anytime to return to app.',
+        data: { url: 'orangetaxidriver://' },
+        color: '#F97316',
+        sticky: true,
+        autoDismiss: false,
+        priority: Notifications.AndroidNotificationPriority.MAX,
+      },
+      trigger: null,
+    });
+  } catch (e) {
+    console.warn('Could not post return-to-app notification:', e);
+  }
+}
+
+export async function clearReturnToAppNotification() {
+  try {
+    await Notifications.dismissNotificationAsync('orange-taxi-active-trip-return');
+  } catch (e) {
+    // Ignore error if already dismissed
+  }
+}

@@ -1,6 +1,7 @@
 import { Platform, Linking } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Booking } from '../types';
+import { showReturnToAppNotification } from './notificationService';
 
 // Curated Pan-India coordinates dictionary for fallback location matching
 const KNOWN_AREAS: Record<string, { lat: number; lng: number }> = {
@@ -147,6 +148,11 @@ export function resolveBookingTargetCoords(
 export async function openGoogleMaps(lat: number, lng: number, label?: string): Promise<void> {
   try {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  } catch {}
+
+  // Post persistent return-to-app notification so chauffeur can tap to return from Google Maps
+  try {
+    await showReturnToAppNotification(label);
   } catch {}
 
   const destinationParam = `${lat},${lng}`;
