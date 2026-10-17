@@ -128,28 +128,30 @@ export function ActiveRideSheet({
 
     try {
       let verified = false;
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(booking.id);
+      const expected = booking.ride_otp?.trim() || '';
 
-      if (isUuid) {
-        try {
-          const { data, error } = await supabase.rpc('verify_ride_otp', {
-            _booking_id: booking.id,
-            _otp: cleanOtp,
-          });
+      // 1. Instant local verification against active booking ride_otp
+      if (expected && cleanOtp === expected) {
+        verified = true;
+      }
 
-          if (!error && data?.success) {
-            verified = true;
-          } else if (
-            error &&
-            (error.message?.includes('schema cache') ||
-              error.message?.includes('not find') ||
-              error.code === 'PGRST202')
-          ) {
-            // Function missing in PostgREST schema cache - fallback to direct booking verification
-            const expected = booking.ride_otp?.trim() || '';
-            if (expected && cleanOtp === expected) {
+      // 2. If not matched locally, attempt server-side verification
+      if (!verified) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(booking.id);
+        if (isUuid) {
+          try {
+            const { data, error } = await supabase.rpc('verify_ride_otp', {
+              _booking_id: booking.id,
+              _otp: cleanOtp,
+            });
+            if (!error && data?.success) {
               verified = true;
-            } else {
+            }
+          } catch {}
+
+          if (!verified) {
+            // Fresh database fetch check from bookings table
+            try {
               const { data: bData } = await supabase
                 .from('bookings')
                 .select('ride_otp')
@@ -158,25 +160,8 @@ export function ActiveRideSheet({
               if (bData?.ride_otp?.trim() === cleanOtp) {
                 verified = true;
               }
-            }
-          } else {
-            setOtpError(true);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            Alert.alert(
-              'Verification Failed',
-              data?.error || error?.message || 'The 4-digit OTP does not match the passenger’s ride code.'
-            );
-            return;
+            } catch {}
           }
-        } catch {
-          if (booking.ride_otp?.trim() === cleanOtp) {
-            verified = true;
-          }
-        }
-      } else {
-        const expectedOtp = booking.ride_otp?.trim() || '';
-        if (cleanOtp === expectedOtp) {
-          verified = true;
         }
       }
 
