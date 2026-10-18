@@ -59,6 +59,7 @@ import { formatRupees, round2 } from './src/lib/formatters';
 import { soundService } from './src/lib/soundService';
 import { resolveBookingTargetCoords } from './src/lib/locationResolver';
 import { registerForDriverPushNotificationsAsync, sendDriverLocalNotification } from './src/lib/notificationService';
+import { getTodayOnlineDutySeconds, recordChauffeurOnline, recordChauffeurOffline } from './src/lib/dutyTracker';
 
 import * as TaskManager from 'expo-task-manager';
 
@@ -214,6 +215,31 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isOnline, shiftStartTime]);
 
+  // Live ticker for online duty hours (updates in real time while online)
+  useEffect(() => {
+    if (!isOnline) return;
+
+    // Immediately calculate and update duty hours
+    getTodayOnlineDutySeconds(true).then((sec) => {
+      const hours = round2(sec / 3600);
+      setStats((prev) => (prev ? { ...prev, todayHours: hours } : prev));
+    });
+
+    const interval = setInterval(async () => {
+      const totalSec = await getTodayOnlineDutySeconds(true);
+      const hours = round2(totalSec / 3600);
+      setStats((prev) => {
+        if (!prev) return prev;
+        if (Math.abs((prev.todayHours || 0) - hours) >= 0.05) {
+          return { ...prev, todayHours: hours };
+        }
+        return prev;
+      });
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [isOnline]);
+
   // Load theme on mount
   useEffect(() => {
     AsyncStorage.getItem('@orange_driver_theme').then(saved => {
@@ -247,7 +273,7 @@ export default function App() {
       // Query completed bookings for this driver
       const { data: allBookings, error } = await supabase
         .from('bookings')
-        .select('final_fare, estimated_fare, payment_method, completed_at, created_at, status')
+        .select('final_fare, estimated_fare, payment_method, completed_at, created_at, started_at, duration_min, status')
         .in('driver_id', driverIds)
         .eq('status', 'completed')
         .order('created_at', { ascending: false });
@@ -298,20 +324,22 @@ export default function App() {
       );
       const allNetEarnings = round2(allRawTotal * 0.85);
 
-      // Online duty hours
-      let dutyHours = 0;
-      try {
-        const onlineStartStr = await AsyncStorage.getItem('@orange_online_start_time');
-        if (onlineStartStr) {
-          const startTime = parseInt(onlineStartStr, 10);
-          if (!isNaN(startTime) && startTime > 0) {
-            dutyHours = round2((Date.now() - startTime) / (1000 * 60 * 60));
-          }
+      // Calculate today's online duty hours accurately from duty tracker and verified rides
+      const dutySec = await getTodayOnlineDutySeconds(isOnline);
+
+      // Verify against actual passenger trip durations completed today
+      const tripMinSum = todayBookings.reduce((sum, b) => {
+        let mins = Number(b.duration_min) || 0;
+        if (mins <= 0 && b.started_at && b.completed_at) {
+          mins = Math.max(0, Math.round((new Date(b.completed_at).getTime() - new Date(b.started_at).getTime()) / 60000));
         }
-      } catch {}
-      if (dutyHours <= 0) {
-        dutyHours = round2(todayTrips > 0 ? todayTrips * 0.75 : (isOnline ? 0.5 : 0));
-      }
+        return sum + mins;
+      }, 0);
+      const tripSec = tripMinSum * 60;
+
+      // Online duty cannot be less than time actually spent in passenger trips today
+      const finalDutySec = Math.max(dutySec, tripSec);
+      const dutyHours = round2(finalDutySec / 3600);
 
       // Strictly separate today's stats from all-time stats
       const updatedStats: DriverStats = {
@@ -358,7 +386,13 @@ export default function App() {
             if (parsed && parsed.id) {
               setDriver(parsed);
               driverRef.current = parsed;
-              setIsOnline(parsed.is_online ?? true);
+              const onlineState = parsed.is_online ?? true;
+              setIsOnline(onlineState);
+              if (onlineState) {
+                recordChauffeurOnline().catch(() => {});
+              } else {
+                recordChauffeurOffline().catch(() => {});
+              }
               fetchTodayStats(parsed.id, parsed).catch(() => {});
             }
           } catch {}
@@ -533,6 +567,11 @@ export default function App() {
       driverRef.current = driverProfile;
       setIsPendingApproval(false);
       setIsOnline(driverProfile.is_online);
+      if (driverProfile.is_online) {
+        await recordChauffeurOnline();
+      } else {
+        await recordChauffeurOffline();
+      }
       setShowAuthModal(false);
       await AsyncStorage.setItem('orange_taxi_driver', JSON.stringify(driverProfile));
 
@@ -906,9 +945,9 @@ export default function App() {
     } catch {}
 
     if (nextState) {
-      await AsyncStorage.setItem('@orange_online_start_time', Date.now().toString());
+      await recordChauffeurOnline();
     } else {
-      await AsyncStorage.removeItem('@orange_online_start_time');
+      await recordChauffeurOffline();
       await soundService.stopDispatchAlert();
       setIncomingBooking(null);
     }
@@ -1525,7 +1564,7 @@ export default function App() {
             setIsOnline(true);
             setShowAuthModal(false);
             await AsyncStorage.setItem('orange_taxi_driver', JSON.stringify(authenticatedDriver));
-            await AsyncStorage.setItem('@orange_online_start_time', Date.now().toString());
+            await recordChauffeurOnline();
             await fetchTodayStats(authenticatedDriver.id, authenticatedDriver);
           }}
           theme={theme}
