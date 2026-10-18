@@ -121,7 +121,7 @@ export function ActiveRideSheet({
   async function handleVerifyOtp() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const cleanOtp = enteredOtp.trim();
-    if (cleanOtp.length !== 4) {
+    if (cleanOtp.length < 4) {
       setOtpError(true);
       return;
     }
@@ -361,7 +361,7 @@ export function ActiveRideSheet({
                 Passenger Boarding
               </Text>
               <Text style={styles.otpInstructions}>
-                Ask passenger for the 4-digit start OTP shown on their phone.
+                Ask passenger for the start OTP shown on their phone.
               </Text>
             </View>
 
@@ -372,7 +372,7 @@ export function ActiveRideSheet({
             </View>
           </View>
 
-          {/* 4-Digit OTP Input Box */}
+          {/* OTP Input Box */}
           <View style={styles.otpInputContainer}>
             <TextInput
               style={[
@@ -380,15 +380,15 @@ export function ActiveRideSheet({
                 isDark && styles.otpInputDark,
                 otpError && styles.otpInputError,
               ]}
-              placeholder="ENTER 4-DIGIT OTP"
+              placeholder="ENTER START OTP"
               placeholderTextColor={isDark ? '#64748B' : '#94A3B8'}
               keyboardType="number-pad"
-              maxLength={4}
+              maxLength={6}
               value={enteredOtp}
               onChangeText={(text) => {
                 setEnteredOtp(text);
                 setOtpError(false);
-                if (text.length === 4) {
+                if (text.length >= 4) {
                   Keyboard.dismiss();
                 }
               }}
@@ -398,9 +398,9 @@ export function ActiveRideSheet({
             <TouchableOpacity
               style={[
                 styles.verifyOtpBtn,
-                enteredOtp.length !== 4 && styles.verifyOtpBtnDisabled,
+                enteredOtp.length < 4 && styles.verifyOtpBtnDisabled,
               ]}
-              disabled={enteredOtp.length !== 4}
+              disabled={enteredOtp.length < 4}
               onPress={handleVerifyOtp}
             >
               <CheckCircle size={18} color="#FFFFFF" />

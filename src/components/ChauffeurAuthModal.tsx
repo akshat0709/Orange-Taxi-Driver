@@ -57,9 +57,13 @@ export function ChauffeurAuthModal({
   const iconColor = isLight ? '#64748B' : '#94A3B8';
   const placeholderColor = isLight ? '#94A3B8' : '#64748B';
 
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'verify_otp'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [otpDigits, setOtpDigits] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [otpLockoutRemaining, setOtpLockoutRemaining] = useState(0);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [cdlNumber, setCdlNumber] = useState('');
@@ -145,6 +149,125 @@ const handleAadhaarChange = (text: string) => {
     }
   };
 
+  // 30-second Resend OTP Cooldown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
+
+  // Lockout countdown timer
+  useEffect(() => {
+    const checkLockout = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('@orange_driver_otp_lockout');
+        if (stored) {
+          const diff = Math.ceil((parseInt(stored, 10) - Date.now()) / 1000);
+          if (diff > 0) {
+            setOtpLockoutRemaining(diff);
+          } else {
+            setOtpLockoutRemaining(0);
+            await AsyncStorage.removeItem('@orange_driver_otp_lockout');
+          }
+        }
+      } catch {}
+    };
+    checkLockout();
+    const interval = setInterval(checkLockout, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleVerifyOtp = async () => {
+    if (otpLockoutRemaining > 0) {
+      Alert.alert('Verification Locked', `Too many failed attempts. Please wait ${otpLockoutRemaining} seconds.`);
+      return;
+    }
+    const cleanOtp = otpDigits.trim();
+    if (cleanOtp.length !== 6) {
+      Alert.alert('Invalid Code', 'Please enter the complete 6-digit verification code.');
+      return;
+    }
+
+    setLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      let { data, error } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: cleanOtp,
+        type: 'signup',
+      });
+
+      if (error) {
+        const retry = await supabase.auth.verifyOtp({
+          email: email.trim(),
+          token: cleanOtp,
+          type: 'email',
+        });
+        if (!retry.error) {
+          data = retry.data;
+          error = null;
+        }
+      }
+
+      if (error) {
+        const stored = await AsyncStorage.getItem('@orange_driver_otp_attempts');
+        let attempts = stored ? parseInt(stored, 10) : 0;
+        attempts++;
+        if (attempts >= 5) {
+          await AsyncStorage.setItem('@orange_driver_otp_lockout', (Date.now() + 60 * 1000).toString());
+          await AsyncStorage.setItem('@orange_driver_otp_attempts', '0');
+          setOtpLockoutRemaining(60);
+          Alert.alert('Verification Locked', '5 unsuccessful attempts. Please wait 1 minute before trying again.');
+        } else {
+          await AsyncStorage.setItem('@orange_driver_otp_attempts', attempts.toString());
+          Alert.alert('Verification Failed', `${error.message} (${5 - attempts} attempts remaining).`);
+        }
+        return;
+      }
+
+      await AsyncStorage.removeItem('@orange_driver_otp_attempts');
+      await AsyncStorage.removeItem('@orange_driver_otp_lockout');
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(
+        'Email Verified!',
+        'Your chauffeur account is verified. You can now sign in to access your Chauffeur Console.',
+        [{ text: 'Continue to Sign In', onPress: () => setMode('signin') }]
+      );
+    } catch (err: any) {
+      Alert.alert('Verification Error', err.message || 'Failed to verify code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || !email.trim()) return;
+    setLoading(true);
+    try {
+      let { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+      });
+      if (error) {
+        const retry = await supabase.auth.resend({
+          type: 'email_change',
+          email: email.trim(),
+        });
+        if (!retry.error) error = null;
+      }
+      if (error) throw error;
+      setResendCooldown(30);
+      Alert.alert('Code Sent', `A new 6-digit verification code has been sent to ${email.trim()}.`);
+    } catch (err: any) {
+      Alert.alert('Resend Failed', err.message || 'Could not resend verification code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Standard Email/Password Sign In
   const handleSignIn = async () => {
     if (!email.trim() || !password.trim()) {
@@ -171,9 +294,16 @@ const handleAadhaarChange = (text: string) => {
 
       if (error) {
         if (error.message?.toLowerCase().includes('email not confirmed')) {
+          setMode('verify_otp');
+          setOtpDigits('');
+          setResendCooldown(30);
+          supabase.auth.resend({
+            type: 'signup',
+            email: email.trim(),
+          }).catch(() => {});
           Alert.alert(
             'Email Verification Required',
-            'Please verify your email address to continue. Check your inbox for the confirmation email from Orange Taxi, or click the link to confirm.'
+            `A 6-digit verification code has been sent to ${email.trim()}. Please enter it below or tap the confirmation link in your email.`
           );
           setLoading(false);
           return;
@@ -282,8 +412,18 @@ const handleAadhaarChange = (text: string) => {
 
   // Sign Up New Chauffeur
   const handleSignUp = async () => {
-    if (!email.trim() || !password.trim() || !fullName.trim() || !phone.trim() || !cdlNumber.trim() || !aadhaarNumber.trim() || !yearsDriving.trim() || !city.trim() || !driverPhotoUrl || !documentsUrl) {
+    if (!email.trim() || !password.trim() || !confirmPassword.trim() || !fullName.trim() || !phone.trim() || !cdlNumber.trim() || !aadhaarNumber.trim() || !yearsDriving.trim() || !city.trim() || !driverPhotoUrl || !documentsUrl) {
       Alert.alert('Required Fields', 'Please complete all chauffeur details and upload your documents.');
+      return;
+    }
+
+    if (password.length < 8) {
+      Alert.alert('Weak Password', 'Password must be at least 8 characters long.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Passwords Do Not Match', 'Please ensure both password fields match.');
       return;
     }
 
@@ -373,8 +513,13 @@ const handleAadhaarChange = (text: string) => {
         }
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('Application Submitted', 'Your application has been submitted and is pending admin approval.');
-        setMode('signin');
+        setMode('verify_otp');
+        setOtpDigits('');
+        setResendCooldown(30);
+        Alert.alert(
+          'Application Submitted & Verify Email',
+          `Your application has been received! A 6-digit verification code has been sent to ${email.trim()}. Please enter it to verify your account, or tap the link in your email.`
+        );
       }
     } catch (err: any) {
       Alert.alert('Registration Error', err.message || 'Could not register chauffeur.');
@@ -429,53 +574,173 @@ const handleAadhaarChange = (text: string) => {
             <View style={styles.iconCircle}>
               <Shield size={32} color="#F97316" />
             </View>
-            <Text style={[styles.brandTitle, isLight && styles.brandTitleLight]}>Orange Chauffeur OS</Text>
+            <Text style={[styles.brandTitle, isLight && styles.brandTitleLight]}>
+              {mode === 'verify_otp' ? 'Verify Your Email' : 'Orange Chauffeur OS'}
+            </Text>
             <Text style={[styles.brandSubtitle, isLight && styles.brandSubtitleLight]}>
-              Connected to Supabase Cloud Database • Live Fleet Node
+              {mode === 'verify_otp'
+                ? `Enter the 6-digit verification code sent to ${email || 'your email'}`
+                : 'Connected to Supabase Cloud Database • Live Fleet Node'}
             </Text>
           </View>
 
           {/* Mode Switcher Tabs */}
-          <View style={[styles.tabContainer, isLight && styles.tabContainerLight]}>
-            <TouchableOpacity
-              style={[
-                styles.tabBtn,
-                mode === 'signin' && (isLight ? styles.tabBtnActiveLight : styles.tabBtnActive),
-              ]}
-              onPress={() => setMode('signin')}
-            >
-              <Text
+          {mode !== 'verify_otp' && (
+            <View style={[styles.tabContainer, isLight && styles.tabContainerLight]}>
+              <TouchableOpacity
                 style={[
-                  styles.tabBtnText,
-                  isLight && styles.tabBtnTextLight,
-                  mode === 'signin' && (isLight ? styles.tabBtnTextActiveLight : styles.tabBtnTextActive),
+                  styles.tabBtn,
+                  mode === 'signin' && (isLight ? styles.tabBtnActiveLight : styles.tabBtnActive),
                 ]}
+                onPress={() => setMode('signin')}
               >
-                Sign In
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.tabBtn,
-                mode === 'signup' && (isLight ? styles.tabBtnActiveLight : styles.tabBtnActive),
-              ]}
-              onPress={() => setMode('signup')}
-            >
-              <Text
+                <Text
+                  style={[
+                    styles.tabBtnText,
+                    isLight && styles.tabBtnTextLight,
+                    mode === 'signin' && (isLight ? styles.tabBtnTextActiveLight : styles.tabBtnTextActive),
+                  ]}
+                >
+                  Sign In
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={[
-                  styles.tabBtnText,
-                  isLight && styles.tabBtnTextLight,
-                  mode === 'signup' && (isLight ? styles.tabBtnTextActiveLight : styles.tabBtnTextActive),
+                  styles.tabBtn,
+                  mode === 'signup' && (isLight ? styles.tabBtnActiveLight : styles.tabBtnActive),
                 ]}
+                onPress={() => setMode('signup')}
               >
-                Register Chauffeur
-              </Text>
-            </TouchableOpacity>
-          </View>
+                <Text
+                  style={[
+                    styles.tabBtnText,
+                    isLight && styles.tabBtnTextLight,
+                    mode === 'signup' && (isLight ? styles.tabBtnTextActiveLight : styles.tabBtnTextActive),
+                  ]}
+                >
+                  Register Chauffeur
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Form Fields */}
           <View style={[styles.formContainer, isLight && styles.formContainerLight]}>
-            {mode === 'signup' && (
+            {mode === 'verify_otp' ? (
+              <View style={{ marginTop: 8 }}>
+                {otpLockoutRemaining > 0 && (
+                  <View style={styles.lockoutBanner}>
+                    <Text style={styles.lockoutText}>
+                      Verification locked for 1 minute due to 5 unsuccessful attempts. Please wait {otpLockoutRemaining}s.
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>
+                    6-Digit Verification Code
+                  </Text>
+                  <View style={[styles.inputRow, isLight && styles.inputRowLight, { justifyContent: 'center' }]}>
+                    <TextInput
+                      style={[
+                        styles.textInput,
+                        isLight && styles.textInputLight,
+                        {
+                          textAlign: 'center',
+                          fontSize: 26,
+                          fontWeight: '800',
+                          letterSpacing: 8,
+                          color: '#F97316',
+                          fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+                        },
+                      ]}
+                      placeholder="• • • • • •"
+                      placeholderTextColor={placeholderColor}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      value={otpDigits}
+                      onChangeText={(val) => setOtpDigits(val.replace(/[^0-9]/g, '').slice(0, 6))}
+                      autoFocus
+                    />
+                  </View>
+                </View>
+
+                {/* Email Confirmation Link Tip */}
+                <View
+                  style={{
+                    backgroundColor: isLight ? '#F1F5F9' : '#1E293B',
+                    borderRadius: 12,
+                    padding: 12,
+                    marginVertical: 14,
+                    borderWidth: 1,
+                    borderColor: isLight ? '#E2E8F0' : '#334155',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: isLight ? '#64748B' : '#94A3B8',
+                      textAlign: 'center',
+                      lineHeight: 18,
+                    }}
+                  >
+                    Tip: You can also tap the confirmation link directly in the email to activate your account.
+                  </Text>
+                </View>
+
+                {/* Resend 30s Cooldown */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, paddingHorizontal: 4 }}>
+                  <Text style={{ fontSize: 13, color: isLight ? '#64748B' : '#94A3B8' }}>
+                    Didn't receive code?
+                  </Text>
+                  <TouchableOpacity
+                    disabled={resendCooldown > 0 || loading}
+                    onPress={handleResendOtp}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: '700',
+                        color: resendCooldown > 0 ? '#94A3B8' : '#F97316',
+                      }}
+                    >
+                      {resendCooldown > 0 ? `Resend Code (${resendCooldown}s)` : 'Resend Code'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Verify Button */}
+                <TouchableOpacity
+                  style={[
+                    styles.submitBtn,
+                    (loading || otpDigits.length !== 6 || otpLockoutRemaining > 0) && { opacity: 0.6 },
+                  ]}
+                  disabled={loading || otpDigits.length !== 6 || otpLockoutRemaining > 0}
+                  onPress={handleVerifyOtp}
+                  activeOpacity={0.85}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : otpLockoutRemaining > 0 ? (
+                    <Text style={styles.submitBtnText}>Locked ({otpLockoutRemaining}s)</Text>
+                  ) : (
+                    <Text style={styles.submitBtnText}>Verify & Continue</Text>
+                  )}
+                </TouchableOpacity>
+
+                {/* Switch back to sign in */}
+                <TouchableOpacity
+                  style={{ alignItems: 'center', marginTop: 18 }}
+                  onPress={() => setMode('signin')}
+                >
+                  <Text style={{ color: isLight ? '#64748B' : '#94A3B8', fontSize: 13, fontWeight: '600' }}>
+                    ← Back to Sign In
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                {mode === 'signup' && (
               <>
                 <View style={styles.inputGroup}>
                   <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Full Name</Text>
@@ -772,6 +1037,23 @@ const handleAadhaarChange = (text: string) => {
             </View>
 
             {mode === 'signup' && (
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, isLight && styles.inputLabelLight]}>Confirm Password</Text>
+                <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
+                  <Lock size={18} color={iconColor} style={{ marginRight: 10 }} />
+                  <TextInput
+                    style={[styles.textInput, isLight && styles.textInputLight]}
+                    placeholder="Re-enter your password"
+                    placeholderTextColor={placeholderColor}
+                    secureTextEntry
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                  />
+                </View>
+              </View>
+            )}
+
+            {mode === 'signup' && (
               <View style={{ marginBottom: 12 }}>
                 <Text style={[styles.disclaimerText, isLight && styles.disclaimerTextLight]}>
                   By submitting this form, you consent to data processing under the Digital Personal Data Protection (DPDP) Act, 2023 and agree to our{' '}
@@ -832,6 +1114,8 @@ const handleAadhaarChange = (text: string) => {
                     </Text>.
                   </Text>
                 </View>
+              </>
+            )}
               </>
             )}
           </View>
@@ -1222,5 +1506,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
+  },
+  lockoutBanner: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 14,
+  },
+  lockoutText: {
+    color: '#EF4444',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 16,
   },
 });
