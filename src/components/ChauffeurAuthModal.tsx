@@ -170,8 +170,17 @@ const handleAadhaarChange = (text: string) => {
       });
 
       if (error) {
+        if (error.message?.toLowerCase().includes('email not confirmed')) {
+          Alert.alert(
+            'Email Verification Required',
+            'Please verify your email address to continue. Check your inbox for the confirmation email from Orange Taxi, or click the link to confirm.'
+          );
+          setLoading(false);
+          return;
+        }
+
         const storedAttempts = await AsyncStorage.getItem('@orange_driver_attempts');
-        let attempts = storedAttempts ? parseInt(storedAttempts) : 0;
+        let attempts = storedAttempts ? parseInt(storedAttempts, 10) : 0;
         attempts++;
         if (attempts >= 5) {
           await AsyncStorage.setItem('@orange_driver_lockout', (Date.now() + 60 * 1000).toString());
