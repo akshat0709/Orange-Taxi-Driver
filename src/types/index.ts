@@ -16,6 +16,8 @@ export interface Driver {
   rating?: number | null;
   total_rides?: number | null;
   total_trips?: number | null;
+  driver_type?: 'company' | 'partner' | string;
+  vehicle_code?: string;
   status?: string;
   created_at?: string;
   updated_at?: string;

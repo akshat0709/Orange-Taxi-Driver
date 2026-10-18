@@ -292,59 +292,82 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
             </View>
           </View>
 
-          {/* Bank & UPI Settlement Payout */}
-          <View style={[styles.sectionCard, isLight && styles.cardLight]}>
-            <Text style={[styles.sectionTitle, isLight && styles.textDark]}>🏦 Payout & Daily Settlement</Text>
-            <Text style={styles.payoutSubtitle}>Configure your UPI VPA or Bank Account for automated daily trip payouts.</Text>
+          {/* Bank & UPI Settlement Payout (Partner Drivers Only) */}
+          {driver?.driver_type === 'partner' ? (
+            <View style={[styles.sectionCard, isLight && styles.cardLight]}>
+              <Text style={[styles.sectionTitle, isLight && styles.textDark]}>🏦 Payout & Daily Settlement</Text>
+              <Text style={styles.payoutSubtitle}>Configure your UPI VPA or Bank Account for automated daily trip payouts.</Text>
 
-            <View style={{ marginTop: 12 }}>
-              <Text style={[styles.payoutLabel, isLight && styles.textDark]}>UPI ID (GPay / PhonePe / Paytm)</Text>
-              <TextInput
-                style={[styles.payoutInput, isLight && styles.payoutInputLight]}
-                placeholder="e.g. driver@okhdfcbank"
-                placeholderTextColor={isLight ? '#94A3B8' : '#64748B'}
-                value={upiId}
-                onChangeText={setUpiId}
-                autoCapitalize="none"
-              />
+              <View style={{ marginTop: 12 }}>
+                <Text style={[styles.payoutLabel, isLight && styles.textDark]}>UPI ID (GPay / PhonePe / Paytm)</Text>
+                <TextInput
+                  style={[styles.payoutInput, isLight && styles.payoutInputLight]}
+                  placeholder="e.g. driver@okhdfcbank"
+                  placeholderTextColor={isLight ? '#94A3B8' : '#64748B'}
+                  value={upiId}
+                  onChangeText={setUpiId}
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={{ marginTop: 10 }}>
+                <Text style={[styles.payoutLabel, isLight && styles.textDark]}>Bank Account Number</Text>
+                <TextInput
+                  style={[styles.payoutInput, isLight && styles.payoutInputLight]}
+                  placeholder="e.g. 50100234567890"
+                  placeholderTextColor={isLight ? '#94A3B8' : '#64748B'}
+                  value={bankAccount}
+                  onChangeText={setBankAccount}
+                  keyboardType="number-pad"
+                />
+              </View>
+
+              <View style={{ marginTop: 10 }}>
+                <Text style={[styles.payoutLabel, isLight && styles.textDark]}>Bank IFSC Code</Text>
+                <TextInput
+                  style={[styles.payoutInput, isLight && styles.payoutInputLight]}
+                  placeholder="e.g. HDFC0001234"
+                  placeholderTextColor={isLight ? '#94A3B8' : '#64748B'}
+                  value={ifscCode}
+                  onChangeText={(t) => setIfscCode(t.toUpperCase())}
+                  autoCapitalize="characters"
+                />
+              </View>
+
+              <TouchableOpacity
+                style={styles.savePayoutBtn}
+                disabled={savingPayout}
+                onPress={handleSavePayout}
+              >
+                {savingPayout ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.savePayoutBtnText}>SAVE SETTLEMENT DETAILS</Text>
+                )}
+              </TouchableOpacity>
             </View>
-
-            <View style={{ marginTop: 10 }}>
-              <Text style={[styles.payoutLabel, isLight && styles.textDark]}>Bank Account Number</Text>
-              <TextInput
-                style={[styles.payoutInput, isLight && styles.payoutInputLight]}
-                placeholder="e.g. 50100234567890"
-                placeholderTextColor={isLight ? '#94A3B8' : '#64748B'}
-                value={bankAccount}
-                onChangeText={setBankAccount}
-                keyboardType="number-pad"
-              />
+          ) : (
+            <View style={[styles.sectionCard, isLight && styles.cardLight]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={[styles.sectionTitle, isLight && styles.textDark]}>💼 Monthly Salary & Benefits</Text>
+                <View style={{ backgroundColor: 'rgba(249, 115, 22, 0.12)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                  <Text style={{ color: '#F97316', fontSize: 11, fontWeight: '700' }}>Company Chauffeur</Text>
+                </View>
+              </View>
+              <Text style={styles.payoutSubtitle}>
+                You are a full-time company-employed chauffeur with a guaranteed monthly salary. Daily trip bank payouts are not applicable.
+              </Text>
+              <View style={{ marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: isLight ? '#F1F5F9' : '#1E293B' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: isLight ? '#0F172A' : '#FFFFFF', marginBottom: 4 }}>
+                  Monthly Salary Structure
+                </Text>
+                <Text style={{ fontSize: 11, color: isLight ? '#64748B' : '#94A3B8', lineHeight: 16 }}>
+                  • Fixed base salary credited directly to your registered payroll bank account on the 1st of every month.{'\n'}
+                  • Monthly ride milestone bonuses (up to ₹4,500 extra) calculated and paid along with your salary.
+                </Text>
+              </View>
             </View>
-
-            <View style={{ marginTop: 10 }}>
-              <Text style={[styles.payoutLabel, isLight && styles.textDark]}>Bank IFSC Code</Text>
-              <TextInput
-                style={[styles.payoutInput, isLight && styles.payoutInputLight]}
-                placeholder="e.g. HDFC0001234"
-                placeholderTextColor={isLight ? '#94A3B8' : '#64748B'}
-                value={ifscCode}
-                onChangeText={(t) => setIfscCode(t.toUpperCase())}
-                autoCapitalize="characters"
-              />
-            </View>
-
-            <TouchableOpacity
-              style={styles.savePayoutBtn}
-              disabled={savingPayout}
-              onPress={handleSavePayout}
-            >
-              {savingPayout ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.savePayoutBtnText}>SAVE SETTLEMENT DETAILS</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          )}
 
           {/* Support Hotline CTA */}
           <TouchableOpacity style={[styles.supportBtn, isLight && styles.supportBtnLight]} onPress={handleCallSupport} activeOpacity={0.8}>

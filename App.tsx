@@ -511,6 +511,8 @@ export default function App() {
           vehicle_model: driverRowFinal.vehicle_model || 'No Vehicle Assigned',
           vehicle_number: driverRowFinal.vehicle_number || '',
           vehicle_type: driverRowFinal.vehicle_type || '',
+          driver_type: driverRowFinal.driver_type || (driverRowFinal.vehicle_code?.includes('"type":"partner"') ? 'partner' : 'company'),
+          vehicle_code: driverRowFinal.vehicle_code || '',
           is_online: driverRowFinal.is_online ?? true,
           current_lat: driverRowFinal.current_lat || 12.9716,
           current_lng: driverRowFinal.current_lng || 77.5946,
@@ -1471,6 +1473,7 @@ export default function App() {
           visible={showEarningsModal}
           onClose={() => setShowEarningsModal(false)}
           driverId={driver?.id!}
+          driver={driver}
           theme={theme}
         />
 
