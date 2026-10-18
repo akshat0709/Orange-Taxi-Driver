@@ -172,6 +172,7 @@ export default function App() {
       setIsNetworkOffline(state.isConnected === false);
     });
     registerForDriverPushNotificationsAsync().catch(() => {});
+    soundService.configureAudioMode().catch(() => {});
     return () => unsubscribe();
   }, []);
 

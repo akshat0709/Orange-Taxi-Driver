@@ -57,6 +57,18 @@ export async function sendDriverLocalNotification(
   data: Record<string, any> = {}
 ) {
   try {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('orange-driver-dispatches', {
+        name: 'Orange Chauffeur Dispatches & Alerts',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 500, 250, 500],
+        lightColor: '#F97316',
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+      });
+    }
+
     await Notifications.scheduleNotificationAsync({
       content: {
         title,
@@ -65,6 +77,7 @@ export async function sendDriverLocalNotification(
         sound: 'default',
         color: '#F97316',
         priority: Notifications.AndroidNotificationPriority.MAX,
+        ...(Platform.OS === 'android' ? { channelId: 'orange-driver-dispatches' } : {}),
       },
       trigger: null,
     });
