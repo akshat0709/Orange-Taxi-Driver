@@ -717,7 +717,7 @@ export function InRideChatModal({
           {/* Quick Response & GPS Sharing Chips */}
           <View style={styles.chipsContainer}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {/* Dedicated GPS Share Button (Uber/Ola Style) */}
+              {/* Dedicated GPS Share Button */}
               <TouchableOpacity
                 style={[styles.chip, styles.gpsShareChip]}
                 activeOpacity={0.8}

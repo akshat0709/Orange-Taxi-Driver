@@ -81,7 +81,7 @@ export const VERIFIED_BE6_CHARGERS: EVChargerBay[] = [
   },
   {
     id: 'charger-delhi-igi',
-    name: 'BluSmart & Jio-bp Mega Hub T3',
+    name: 'Jio-bp Mega EV Hub T3',
     area: 'IGI Airport T3 Multi-Level Parking',
     lat: 28.5562,
     lng: 77.1000,
