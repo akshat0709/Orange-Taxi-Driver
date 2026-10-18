@@ -1104,7 +1104,21 @@ export default function App() {
       const finalFare = round2(activeBooking.final_fare || activeBooking.estimated_fare);
       updates.completed_at = new Date().toISOString();
       updates.final_fare = finalFare;
-      updates.payment_status = 'completed';
+
+      const rawPaymentMade = String(activeBooking.payment_made ?? extraUpdates?.payment_made ?? '').trim().toLowerCase();
+      const isExplicitlyNo = rawPaymentMade === 'no' || activeBooking.payment_made === false || extraUpdates?.payment_made === false;
+      const isExplicitlyYes = rawPaymentMade === 'yes' || activeBooking.payment_made === true || extraUpdates?.payment_made === true;
+
+      const isPaidOnline = isExplicitlyNo
+        ? false
+        : isExplicitlyYes
+        ? true
+        : activeBooking.payment_method === 'cash' || activeBooking.payment_method === 'driver_upi'
+        ? false
+        : activeBooking.payment_status === 'paid' || activeBooking.payment_status === 'paid_online' || activeBooking.payment_method === 'wallet';
+
+      updates.payment_status = isPaidOnline ? 'paid' : (extraUpdates?.payment_status || 'pending');
+      updates.payment_made = isPaidOnline ? 'yes' : 'no';
 
       if (isNetworkOffline) {
         await enqueueOffline(activeBooking.id, updates);
@@ -1131,7 +1145,12 @@ export default function App() {
 
         // Persist directly to Supabase bookings table
         try {
-          await supabase.from('bookings').update(updates).eq('id', activeBooking.id);
+          const { error: updErr } = await supabase.from('bookings').update(updates).eq('id', activeBooking.id);
+          if (updErr && updErr.message && updErr.message.includes('payment_made')) {
+            const safeUpdates = { ...updates };
+            delete safeUpdates.payment_made;
+            await supabase.from('bookings').update(safeUpdates).eq('id', activeBooking.id);
+          }
         } catch {
           await enqueueOffline(activeBooking.id, updates);
         }

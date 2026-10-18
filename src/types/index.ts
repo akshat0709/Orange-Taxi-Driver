@@ -44,6 +44,7 @@ export interface Booking {
   status: 'searching' | 'accepted' | 'arrived' | 'in_progress' | 'completed' | 'cancelled' | 'scheduled';
   payment_method: 'cash' | 'upi' | 'wallet' | string;
   payment_status: string;
+  payment_made?: string | boolean | null;
   ride_otp?: string | null;
   scheduled_at?: string | null;
   accepted_at?: string | null;

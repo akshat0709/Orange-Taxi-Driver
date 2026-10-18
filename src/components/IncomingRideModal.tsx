@@ -93,22 +93,41 @@ export function IncomingRideModal({
 
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.fareAmount}>₹{formatRupees(booking.estimated_fare)}</Text>
-              <View style={styles.paymentMethodRow}>
-                {booking.payment_method === 'cash' ? (
-                  <Banknote size={12} color="#10B981" />
-                ) : booking.payment_method === 'wallet' ? (
-                  <Wallet size={12} color="#F97316" />
-                ) : (
-                  <CreditCard size={12} color="#3B82F6" />
-                )}
-                <Text style={styles.paymentMethodText}>
-                  {booking.payment_method === 'cash'
-                    ? 'Cash on Arrival'
-                    : booking.payment_method === 'wallet'
-                    ? 'Orange Wallet'
-                    : 'Prepaid UPI'}
-                </Text>
-              </View>
+              {(() => {
+                const rawPaymentMade = String(booking.payment_made ?? '').trim().toLowerCase();
+                const isExplicitlyNo = rawPaymentMade === 'no' || booking.payment_made === false;
+                const isExplicitlyYes = rawPaymentMade === 'yes' || booking.payment_made === true;
+                const isPaidOnline = isExplicitlyNo
+                  ? false
+                  : isExplicitlyYes
+                  ? true
+                  : booking.payment_method === 'cash' || booking.payment_method === 'driver_upi'
+                  ? false
+                  : booking.payment_status === 'paid' || booking.payment_status === 'paid_online'
+                  ? true
+                  : booking.payment_method === 'wallet'
+                  ? true
+                  : false;
+
+                return (
+                  <View style={styles.paymentMethodRow}>
+                    {booking.payment_method === 'cash' || !isPaidOnline ? (
+                      <Banknote size={12} color="#10B981" />
+                    ) : booking.payment_method === 'wallet' ? (
+                      <Wallet size={12} color="#F97316" />
+                    ) : (
+                      <CreditCard size={12} color="#3B82F6" />
+                    )}
+                    <Text style={styles.paymentMethodText}>
+                      {booking.payment_method === 'cash' || !isPaidOnline
+                        ? 'Collect on Arrival'
+                        : booking.payment_method === 'wallet'
+                        ? 'Orange Wallet'
+                        : 'Paid Online'}
+                    </Text>
+                  </View>
+                );
+              })()}
             </View>
           </View>
 
