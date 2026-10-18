@@ -1,5 +1,5 @@
 import "./src/i18n";
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Component, ErrorInfo, ReactNode, useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -120,7 +120,91 @@ function getDistanceInKm(lat1: number, lon1: number, lat2: number, lon2: number)
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
 
-export default function App() {
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+  };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.warn("Orange Taxi Driver caught runtime error:", error, errorInfo);
+  }
+
+  handleRestart = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={driverErrorStyles.container}>
+          <Text style={driverErrorStyles.emoji}>🚖</Text>
+          <Text style={driverErrorStyles.title}>Orange Chauffeur</Text>
+          <Text style={driverErrorStyles.subtitle}>
+            An unexpected error occurred. Tap below to reload the app cleanly.
+          </Text>
+          <TouchableOpacity style={driverErrorStyles.button} onPress={this.handleRestart}>
+            <Text style={driverErrorStyles.buttonText}>Restart App</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const driverErrorStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0B0D11',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  emoji: {
+    fontSize: 56,
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#F97316',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  button: {
+    backgroundColor: '#F97316',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 14,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+});
+
+function MainChauffeurApp() {
   // Splash & Authentication state
   const [showSplash, setShowSplash] = useState(true);
   const showSplashRef = useRef(true);
@@ -614,79 +698,71 @@ export default function App() {
         
         const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
         if (fgStatus === 'granted') {
-          // Always use foreground watch for precise updates
+          try {
+            const initial = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            });
+
+            if (isMounted && initial?.coords) {
+              setDriverLocation({
+                latitude: initial.coords.latitude,
+                longitude: initial.coords.longitude,
+                heading: initial.coords.heading || 0,
+              });
+            }
+          } catch (posErr) {
+            console.log('Initial location fetch failed, waiting for watch updates:', posErr);
+          }
+
+          // Single active location watch
           locationSubscription.current = await Location.watchPositionAsync(
             { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 5 },
             async (loc) => {
-              if (loc?.coords) {
-                setDriverLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-                try {
-                  const saved = await AsyncStorage.getItem('orange_taxi_driver');
-                  if (saved) {
-                    const d = JSON.parse(saved);
+              if (!isMounted || !loc?.coords) return;
+              setDriverLocation({
+                latitude: loc.coords.latitude,
+                longitude: loc.coords.longitude,
+                heading: loc.coords.heading || 0,
+              });
+              try {
+                const saved = await AsyncStorage.getItem('orange_taxi_driver');
+                if (saved) {
+                  const d = JSON.parse(saved);
+                  if (d?.id) {
                     await supabase.from('drivers').update({
                       current_lat: loc.coords.latitude,
                       current_lng: loc.coords.longitude,
                       location_updated_at: new Date().toISOString(),
                     }).eq('id', d.id);
                   }
-                } catch (e) {}
-              }
+                }
+              } catch (e) {}
             }
           );
           
           try {
-            // Expo Go on Android completely lacks background location capabilities and throws intrusive warnings.
-            // Only attempt background location tracking in standalone builds or on iOS Simulator.
             if (Platform.OS === 'android' && __DEV__) {
-               console.log('Skipping background location in Expo Go Android to avoid warnings.');
+              console.log('Skipping background location in Expo Go Android to avoid warnings.');
             } else {
-              await Location.requestBackgroundPermissionsAsync();
-              await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
-                accuracy: Location.Accuracy.Balanced,
-                timeInterval: 15000,
-                distanceInterval: 20,
-                showsBackgroundLocationIndicator: true,
-                foregroundService: {
-                  notificationTitle: 'Orange Chauffeur Active',
-                  notificationBody: 'Broadcasting live location for dispatches.',
-                  notificationColor: '#F97316',
-                }
-              });
+              const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+              if (bgStatus === 'granted') {
+                await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
+                  accuracy: Location.Accuracy.Balanced,
+                  timeInterval: 15000,
+                  distanceInterval: 20,
+                  showsBackgroundLocationIndicator: true,
+                  foregroundService: {
+                    notificationTitle: 'Orange Chauffeur Active',
+                    notificationBody: 'Broadcasting live location for dispatches.',
+                    notificationColor: '#F97316',
+                  }
+                });
+              }
             }
           } catch (e) {
             console.log('Background location error, falling back to foreground only', e);
           }
         }
-
-
-        const initial = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-
-        if (isMounted && initial?.coords) {
-          setDriverLocation({
-            latitude: initial.coords.latitude,
-            longitude: initial.coords.longitude,
-            heading: initial.coords.heading || 0,
-          });
-        }
-
-        locationSubscription.current = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.High,
-            timeInterval: 4000,
-            distanceInterval: 10,
-          },
-          (loc) => {
-            if (!isMounted || !loc?.coords) return;
-            setDriverLocation({
-              latitude: loc.coords.latitude,
-              longitude: loc.coords.longitude,
-              heading: loc.coords.heading || 0,
-            });
-          }
-        );
       } catch (err) {
         console.warn('GPS location tracking error:', err);
       }
@@ -1986,3 +2062,11 @@ const styles = StyleSheet.create({
   earningsPillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1 },
   quickMetricsRowLight: { backgroundColor: '#F1F5F9' },
 });
+
+export default function App() {
+  return (
+    <AppErrorBoundary>
+      <MainChauffeurApp />
+    </AppErrorBoundary>
+  );
+}

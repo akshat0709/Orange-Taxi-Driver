@@ -5,6 +5,7 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
   <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>
   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
@@ -35,6 +36,10 @@
         <data android:scheme="orangetaxidriver"/>
       </intent-filter>
     </activity>
+    <service
+        android:name="expo.modules.location.services.LocationTaskService"
+        android:exported="false"
+        android:foregroundServiceType="location" />
     <uses-library android:name="org.apache.http.legacy" android:required="false"/>
   </application>
 </manifest>
