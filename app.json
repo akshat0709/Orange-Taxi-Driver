@@ -47,7 +47,6 @@
     "owner": "akshat0709",
     "plugins": [
       "expo-notifications",
-      "expo-av",
       [
         "expo-location",
         {

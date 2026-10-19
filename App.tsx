@@ -1306,12 +1306,10 @@ function MainChauffeurApp() {
   // Cool Car Animated Splash Screen (Renders immediately on startup)
   if (showSplash) {
     return (
-      <SafeAreaProvider>
-        <CoolCarSplashScreen
-          appType="driver"
-          onFinish={handleSplashFinish}
-        />
-      </SafeAreaProvider>
+      <CoolCarSplashScreen
+        appType="driver"
+        onFinish={handleSplashFinish}
+      />
     );
   }
 
@@ -1328,35 +1326,32 @@ function MainChauffeurApp() {
   if (isPendingApproval) {
     const isLight = theme === 'light';
     return (
-      <SafeAreaProvider>
+      <View style={[styles.container, isLight && styles.containerLight, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
         <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={isLight ? '#FFFFFF' : '#0F172A'} />
-        <View style={[styles.container, isLight && styles.containerLight, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
-          <Shield size={64} color="#F97316" style={{ marginBottom: 24 }} />
-          <Text style={[{ color: '#FFF', fontSize: 24, fontWeight: '800', marginBottom: 12, textAlign: 'center' }, isLight && { color: '#0F172A' }]}>
-            Pending Approval
-          </Text>
-          <Text style={[{ color: '#94A3B8', fontSize: 16, textAlign: 'center', marginBottom: 48, lineHeight: 24 }, isLight && { color: '#64748B' }]}>
-            Your application is currently under review by Orange Taxi Admin. Please check back later.
-          </Text>
-          <TouchableOpacity
-            style={styles.goOnlineBigBtn}
-            onPress={async () => {
-              await supabase.auth.signOut();
-              await AsyncStorage.removeItem('orange_taxi_driver');
-              setIsPendingApproval(false);
-              setShowAuthModal(true);
-            }}
-          >
-            <Text style={styles.goOnlineBigBtnText}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaProvider>
+        <Shield size={64} color="#F97316" style={{ marginBottom: 24 }} />
+        <Text style={[{ color: '#FFF', fontSize: 24, fontWeight: '800', marginBottom: 12, textAlign: 'center' }, isLight && { color: '#0F172A' }]}>
+          Pending Approval
+        </Text>
+        <Text style={[{ color: '#94A3B8', fontSize: 16, textAlign: 'center', marginBottom: 48, lineHeight: 24 }, isLight && { color: '#64748B' }]}>
+          Your application is currently under review by Orange Taxi Admin. Please check back later.
+        </Text>
+        <TouchableOpacity
+          style={styles.goOnlineBigBtn}
+          onPress={async () => {
+            await supabase.auth.signOut();
+            await AsyncStorage.removeItem('orange_taxi_driver');
+            setIsPendingApproval(false);
+            setShowAuthModal(true);
+          }}
+        >
+          <Text style={styles.goOnlineBigBtnText}>Sign Out</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
   return (
-    <SafeAreaProvider>
-      <View style={[styles.container, theme === 'light' && { backgroundColor: '#F8FAFC' }]}>
+    <View style={[styles.container, theme === 'light' && { backgroundColor: '#F8FAFC' }]}>
         <StatusBar barStyle={theme === 'dark' ? "light-content" : "dark-content"} backgroundColor={theme === 'dark' ? "#0F172A" : "#F8FAFC"} />
 
         {/* Fullscreen Map Layer */}
@@ -1688,7 +1683,6 @@ function MainChauffeurApp() {
         </Modal>
 
       </View>
-    </SafeAreaProvider>
   );
 }
 
@@ -2066,7 +2060,9 @@ const styles = StyleSheet.create({
 export default function App() {
   return (
     <AppErrorBoundary>
-      <MainChauffeurApp />
+      <SafeAreaProvider>
+        <MainChauffeurApp />
+      </SafeAreaProvider>
     </AppErrorBoundary>
   );
 }
