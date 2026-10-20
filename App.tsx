@@ -696,7 +696,20 @@ function MainChauffeurApp() {
     async function startLocationWatch() {
       try {
         
-        const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+        const { status: existingFg } = await Location.getForegroundPermissionsAsync();
+        let fgStatus = existingFg;
+        if (existingFg !== 'granted') {
+          await new Promise<void>((resolve) => {
+            Alert.alert(
+              'Location Access Required',
+              'Orange Chauffeur collects precise location data to calculate pickup distance, provide turn-by-turn navigation, and broadcast live GPS tracking to passengers while you are on duty.',
+              [{ text: 'Continue', onPress: () => resolve() }],
+              { cancelable: false }
+            );
+          });
+          const req = await Location.requestForegroundPermissionsAsync();
+          fgStatus = req.status;
+        }
         if (fgStatus === 'granted') {
           try {
             const initial = await Location.getCurrentPositionAsync({

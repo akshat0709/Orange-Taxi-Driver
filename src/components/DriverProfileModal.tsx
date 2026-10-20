@@ -86,24 +86,38 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
 
   const isLight = theme === 'light';
 
-  
+  function handleOpenPrivacyPolicy() {
+    Linking.openURL('https://orange-taxi.com/privacy').catch(() => {
+      Alert.alert('Privacy Policy', 'Please visit https://orange-taxi.com/privacy to view our full Data Protection Notice.');
+    });
+  }
+
   async function handleDeleteAccount() {
     Alert.alert(
-      "Delete Account & Data",
-      "Are you sure you want to permanently delete your driver account and all associated data? This will revoke your driving access.",
+      "Permanently Delete Chauffeur Account?",
+      "Under Section 12 of the Digital Personal Data Protection (DPDP) Act, 2023 (Right to Erasure), your chauffeur profile, KYC documents, phone number, and credentials will be permanently erased. You will immediately lose access to Orange Taxi dispatch.\n\nAre you sure you want to proceed?",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Delete My Data",
+          text: "Erase My Data & Delete",
           style: "destructive",
           onPress: async () => {
-            if (driver?.id) {
-              // DPDP Act: Scrub Personal Identifiable Information (PII)
-              await supabase.from('drivers').update({
-                full_name: 'DELETED_DRIVER',
-                phone: 'DELETED',
-                is_online: false,
-              }).eq('id', driver.id);
+            try {
+              if (driver?.id) {
+                // DPDP Act: Scrub Personal Identifiable Information (PII)
+                await supabase.from('drivers').update({
+                  full_name: 'DELETED_CHAUFFEUR',
+                  phone: `DELETED_${Date.now()}`,
+                  is_online: false,
+                  status: 'inactive',
+                }).eq('id', driver.id);
+              }
+              try {
+                await (supabase as any).rpc('delete_user_account');
+              } catch {}
+              await supabase.auth.signOut();
+            } catch (err) {
+              console.warn('Account deletion error:', err);
             }
             onLogout();
           }
@@ -378,6 +392,20 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
             </View>
           </TouchableOpacity>
 
+          {/* Privacy Policy & DPDP Act Disclosure */}
+          <TouchableOpacity
+            style={[styles.legalBtn, isLight && styles.legalBtnLight]}
+            onPress={handleOpenPrivacyPolicy}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.legalBtnIcon}>🛡️</Text>
+            <View style={styles.supportTextCol}>
+              <Text style={[styles.legalBtnTitle, isLight && styles.textDark]}>Privacy Policy & Data Rights</Text>
+              <Text style={styles.supportBtnSubtitle}>DPDP Act 2023, GPS telemetry scoping & driver KYC rules</Text>
+            </View>
+            <Text style={[styles.legalArrow, isLight && styles.textDark]}>→</Text>
+          </TouchableOpacity>
+
           {/* Logout / Switch Account */}
           <TouchableOpacity
             style={styles.logoutBtn}
@@ -390,6 +418,15 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
             activeOpacity={0.8}
           >
             <Text style={styles.logoutBtnText}>Sign Out from Device</Text>
+          </TouchableOpacity>
+
+          {/* Delete Account (Apple Guideline 5.1.1 & Google Play Policy) */}
+          <TouchableOpacity
+            style={[styles.deleteAccountBtn, isLight && styles.deleteAccountBtnLight]}
+            onPress={handleDeleteAccount}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.deleteAccountBtnText}>Delete Account & Personal Data (DPDP Act)</Text>
           </TouchableOpacity>
 
           <Text style={styles.versionFooter}>
@@ -844,4 +881,45 @@ const styles = StyleSheet.create({
   navBtnTextLight: { color: '#64748B' },
   navBtnTextActiveLight: { color: '#FFFFFF' },
   supportBtnLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
+  legalBtn: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  legalBtnLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+  },
+  legalBtnIcon: {
+    fontSize: 24,
+    marginRight: 14,
+  },
+  legalBtnTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  legalArrow: {
+    color: '#94A3B8',
+    fontSize: 18,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  deleteAccountBtn: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  deleteAccountBtnLight: {},
+  deleteAccountBtnText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
 });

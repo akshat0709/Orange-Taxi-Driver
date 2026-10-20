@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 
 // Configure notification behavior for driver app safely
 try {
@@ -25,6 +25,14 @@ export async function registerForDriverPushNotificationsAsync(): Promise<string 
     let finalStatus = existingStatus;
 
     if (existingStatus !== 'granted') {
+      await new Promise<void>((resolve) => {
+        Alert.alert(
+          'Allow Ride Dispatch Notifications',
+          'Orange Chauffeur requires notification access to alert you of incoming ride dispatches, route changes, and passenger cancellation notices when your phone is locked or you are using another app.',
+          [{ text: 'Continue', onPress: () => resolve() }],
+          { cancelable: false }
+        );
+      });
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
