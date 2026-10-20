@@ -973,9 +973,19 @@ function MainChauffeurApp() {
             if (incomingBooking && newBooking.id === incomingBooking.id) {
               await soundService.stopDispatchAlert();
               setIncomingBooking(null);
+              sendDriverLocalNotification(
+                '❌ Ride Request Cancelled',
+                'The passenger has cancelled this request.',
+                { bookingId: newBooking.id }
+              );
               Alert.alert('Trip Cancelled', 'The passenger has cancelled this request.');
             }
             if (activeBooking && newBooking.id === activeBooking.id) {
+              sendDriverLocalNotification(
+                '❌ Ride Cancelled by Passenger',
+                'The passenger has cancelled this booking.',
+                { bookingId: newBooking.id }
+              );
               Alert.alert('Trip Cancelled', 'The passenger has cancelled this booking.');
               setActiveBooking(null);
             }

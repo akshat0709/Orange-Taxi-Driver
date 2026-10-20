@@ -29,6 +29,7 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { sendDriverLocalNotification } from '../lib/notificationService';
 
 export interface ChatMessage {
   id: string;
@@ -227,13 +228,19 @@ export function InRideChatModal({
 
       AsyncStorage.setItem(storageKey, JSON.stringify(merged)).catch(() => {});
 
-      // Check if any incoming message is from the driver
-      const fromDriver = brandNew.filter((m) => m.sender === 'driver');
-      if (fromDriver.length > 0) {
+      // Check if any incoming message is from the passenger
+      const fromCustomer = brandNew.filter((m) => m.sender === 'customer');
+      if (fromCustomer.length > 0) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         if (!visibleRef.current) {
-          unreadCountRef.current += fromDriver.length;
+          unreadCountRef.current += fromCustomer.length;
           onUnreadCountChangeRef.current?.(unreadCountRef.current);
+          const latest = fromCustomer[fromCustomer.length - 1];
+          sendDriverLocalNotification(
+            `💬 Message from ${latest.senderName || customerName || 'Passenger'}`,
+            latest.text,
+            { bookingId }
+          );
         }
       }
 
