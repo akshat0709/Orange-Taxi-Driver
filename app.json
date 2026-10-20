@@ -11,9 +11,12 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.orangetaxi.driver",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Orange Driver requires live GPS access to navigate to passenger pickup bays and broadcast location.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Orange Driver broadcasts real-time GPS coordinates while on active trips for passenger safety and dispatch.",
+        "NSLocationWhenInUseUsageDescription": "Orange Chauffeur requires precise location access to navigate to passenger pickup bays and calculate trip distances.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Orange Chauffeur broadcasts real-time GPS coordinates while on active duty for passenger safety and fleet dispatch.",
+        "NSCameraUsageDescription": "Orange Chauffeur requires camera access to capture portrait photos and commercial driving licence documents for KYC onboarding.",
+        "NSPhotoLibraryUsageDescription": "Orange Chauffeur requires photo library access to upload commercial driving licence and vehicle documents for account verification.",
         "UIBackgroundModes": [
           "location"
         ]
@@ -22,12 +25,15 @@
     },
     "android": {
       "package": "com.orangetaxi.driver",
+      "versionCode": 1,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION"
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "WAKE_LOCK"
       ],
       "config": {
         "googleMaps": {

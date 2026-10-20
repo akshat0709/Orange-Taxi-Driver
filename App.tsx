@@ -717,9 +717,15 @@ function MainChauffeurApp() {
             });
 
             if (isMounted && initial?.coords) {
+              const inIndia =
+                initial.coords.latitude >= 8.0 &&
+                initial.coords.latitude <= 38.0 &&
+                initial.coords.longitude >= 68.0 &&
+                initial.coords.longitude <= 98.0;
+
               setDriverLocation({
-                latitude: initial.coords.latitude,
-                longitude: initial.coords.longitude,
+                latitude: inIndia ? initial.coords.latitude : 28.5562,
+                longitude: inIndia ? initial.coords.longitude : 77.1000,
                 heading: initial.coords.heading || 0,
               });
             }
@@ -732,9 +738,18 @@ function MainChauffeurApp() {
             { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 5 },
             async (loc) => {
               if (!isMounted || !loc?.coords) return;
+              const inIndia =
+                loc.coords.latitude >= 8.0 &&
+                loc.coords.latitude <= 38.0 &&
+                loc.coords.longitude >= 68.0 &&
+                loc.coords.longitude <= 98.0;
+
+              const effectiveLat = inIndia ? loc.coords.latitude : 28.5562;
+              const effectiveLng = inIndia ? loc.coords.longitude : 77.1000;
+
               setDriverLocation({
-                latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude,
+                latitude: effectiveLat,
+                longitude: effectiveLng,
                 heading: loc.coords.heading || 0,
               });
               try {
