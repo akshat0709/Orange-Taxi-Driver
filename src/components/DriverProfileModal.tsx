@@ -216,7 +216,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
                   <>
                     <Text style={[styles.vehicleModel, isLight && styles.textDark]}>{driver.vehicle_model}</Text>
                     <Text style={styles.vehiclePlate}>{driver.vehicle_number}</Text>
-                    <Text style={styles.vehicleCategory}>{driver.vehicle_type || 'Mahindra BE 6 Signature'}</Text>
+                    <Text style={styles.vehicleCategory}>{driver.vehicle_type || 'Orange Signature'}</Text>
                   </>
                 ) : (
                   <>
