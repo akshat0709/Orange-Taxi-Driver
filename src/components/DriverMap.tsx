@@ -349,7 +349,7 @@ export function DriverMap({
 
     const origin = `${driverCoords.lat},${driverCoords.lng}`;
     const destination = `${targetCoords.lat},${targetCoords.lng}`;
-    const API_KEY = "AIzaSyD-IOH9cMppWtKjw_zn-m7XOE3ut62HVX8";
+    const API_KEY = "AIzaSyCz4SEloomUEX3wQaFn4avuNvQemjuBkMM";
     const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&key=${API_KEY}`;
     
     fetch(url)

@@ -5,7 +5,6 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
   <uses-permission android:name="android.permission.INTERNET"/>
-  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:replace="android:maxSdkVersion"/>
   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
@@ -19,7 +18,7 @@
     </intent>
   </queries>
   <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="true" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="false">
-    <meta-data android:name="com.google.android.geo.API_KEY" android:value="AIzaSyD-IOH9cMppWtKjw_zn-m7XOE3ut62HVX8"/>
+    <meta-data android:name="com.google.android.geo.API_KEY" android:value="AIzaSyCz4SEloomUEX3wQaFn4avuNvQemjuBkMM"/>
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="false"/>
     <meta-data android:name="expo.modules.updates.ENABLE_BSDIFF_PATCH_SUPPORT" android:value="true"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
@@ -36,10 +35,6 @@
         <data android:scheme="orangetaxidriver"/>
       </intent-filter>
     </activity>
-    <service
-        android:name="expo.modules.location.services.LocationTaskService"
-        android:exported="false"
-        android:foregroundServiceType="location" />
     <uses-library android:name="org.apache.http.legacy" android:required="false"/>
   </application>
 </manifest>

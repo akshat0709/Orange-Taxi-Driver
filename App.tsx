@@ -1118,7 +1118,32 @@ function MainChauffeurApp() {
         return;
       }
 
-      // Atomic conditional update: only locks if status is STILL 'searching' and unassigned
+      // 1. Try atomic server-side RPC with concurrency locking and status validation
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('accept_booking', {
+        _booking_id: booking.id,
+      });
+
+      if (!rpcErr && rpcRes) {
+        if (!rpcRes.success) {
+          await handleRideAlreadyClaimed(booking.id);
+          return;
+        }
+
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch {}
+        await soundService.playAcceptChime();
+        setActiveBooking(rpcRes.booking as Booking);
+        setIncomingBooking(null);
+        sendDriverLocalNotification(
+          '🚗 Ride Confirmed!',
+          `Proceed to pickup bay: ${booking.pickup_area}`,
+          { bookingId: booking.id }
+        );
+        return;
+      }
+
+      // 2. Direct atomic conditional update fallback: only locks if status is STILL 'searching' and unassigned
       const { data, error } = await supabase
         .from('bookings')
         .update({
@@ -1132,51 +1157,15 @@ function MainChauffeurApp() {
         .select()
         .maybeSingle();
 
-      if (error && error.code === '23503') {
-        // FK edge-case fallback with the same atomic row-locking constraint
-        const { data: fallbackData } = await supabase
-          .from('bookings')
-          .update({
-            status: 'accepted',
-            accepted_at: new Date().toISOString(),
-          })
-          .eq('id', booking.id)
-          .eq('status', 'searching')
-          .is('driver_id', null)
-          .select()
-          .maybeSingle();
-
-        if (!fallbackData) {
-          await handleRideAlreadyClaimed(booking.id);
-          return;
-        }
-
-        try {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } catch {}
-        await soundService.playAcceptChime();
-        setActiveBooking(fallbackData as Booking);
-        setIncomingBooking(null);
-        sendDriverLocalNotification(
-          '🚗 Ride Confirmed!',
-          `Proceed to pickup bay: ${booking.pickup_area}`,
-          { bookingId: booking.id }
-        );
-        return;
-      }
-
       if (!data) {
-        // 0 rows updated: another chauffeur acquired the lock first!
         await handleRideAlreadyClaimed(booking.id);
         return;
       }
 
-      // Lock successfully acquired! Sole winner.
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch {}
       await soundService.playAcceptChime();
-
       setActiveBooking(data as Booking);
       setIncomingBooking(null);
       sendDriverLocalNotification(
@@ -1184,6 +1173,7 @@ function MainChauffeurApp() {
         `Proceed to pickup bay: ${booking.pickup_area}`,
         { bookingId: booking.id }
       );
+      return;
     } catch (err: any) {
       console.warn('Error accepting ride:', err);
       Alert.alert('Notice', 'Unable to accept ride. Please check network.');
@@ -1284,23 +1274,17 @@ function MainChauffeurApp() {
       if (isNetworkOffline) {
         await enqueueOffline(activeBooking.id, updates);
       } else {
-        // Deduct from customer wallet if payment method is wallet
-        if (activeBooking.payment_method === 'wallet' && activeBooking.customer_id) {
+        // Settle wallet fare via secure server RPC if payment method is wallet
+        if (activeBooking.payment_method === 'wallet') {
           try {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('wallet_balance')
-              .eq('id', activeBooking.customer_id)
-              .single();
-            if (profile) {
-              const currentBal = profile.wallet_balance || 0;
-              await supabase
-                .from('profiles')
-                .update({ wallet_balance: Math.max(0, currentBal - finalFare) })
-                .eq('id', activeBooking.customer_id);
+            const { data: deductRes, error: deductErr } = await supabase.rpc('deduct_ride_wallet_payment', {
+              _booking_id: activeBooking.id,
+            });
+            if (deductErr) {
+              console.warn('Server wallet deduction notice:', deductErr);
             }
           } catch (err) {
-            console.warn('Wallet deduction failed:', err);
+            console.warn('Wallet deduction call error:', err);
           }
         }
 
