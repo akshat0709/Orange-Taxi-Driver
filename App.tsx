@@ -490,9 +490,10 @@ function MainChauffeurApp() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           await loadDriverFromSupabaseUser(session.user);
-        } else if (!saved) {
+        } else {
           setDriver(null);
           driverRef.current = null;
+          await AsyncStorage.removeItem('orange_taxi_driver');
         }
       } catch (err) {
         console.warn('Failed initializing Supabase session:', err);
