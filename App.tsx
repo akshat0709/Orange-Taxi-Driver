@@ -58,6 +58,7 @@ import { CoolCarSplashScreen } from './src/components/CoolCarSplashScreen';
 import { formatRupees, round2 } from './src/lib/formatters';
 import { soundService } from './src/lib/soundService';
 import { resolveBookingTargetCoords } from './src/lib/locationResolver';
+import { detectCityFromCoords } from './src/lib/city-detector';
 import { registerForDriverPushNotificationsAsync, sendDriverLocalNotification } from './src/lib/notificationService';
 import { getTodayOnlineDutySeconds, recordChauffeurOnline, recordChauffeurOffline } from './src/lib/dutyTracker';
 
@@ -83,9 +84,11 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
         const driver = JSON.parse(saved);
         if (driver.is_online) {
           try {
+            const detectedCity = detectCityFromCoords(loc.coords.latitude, loc.coords.longitude, driver.city);
             await supabase.from('drivers').update({
               current_lat: loc.coords.latitude,
               current_lng: loc.coords.longitude,
+              city: detectedCity,
               location_updated_at: new Date().toISOString(),
             }).eq('id', driver.id);
           } catch(e) {}
@@ -757,9 +760,11 @@ function MainChauffeurApp() {
                 if (saved) {
                   const d = JSON.parse(saved);
                   if (d?.id) {
+                    const detectedCity = detectCityFromCoords(loc.coords.latitude, loc.coords.longitude, d.city);
                     await supabase.from('drivers').update({
                       current_lat: loc.coords.latitude,
                       current_lng: loc.coords.longitude,
+                      city: detectedCity,
                       location_updated_at: new Date().toISOString(),
                     }).eq('id', d.id);
                   }
@@ -817,11 +822,13 @@ function MainChauffeurApp() {
 
     locationUpdateTimer.current = setInterval(async () => {
       try {
+        const detectedCity = detectCityFromCoords(driverLocation.latitude, driverLocation.longitude, driver.city);
         await supabase
           .from('drivers')
           .update({
             current_lat: driverLocation.latitude,
             current_lng: driverLocation.longitude,
+            city: detectedCity,
             is_online: true,
             location_updated_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
