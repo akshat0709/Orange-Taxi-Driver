@@ -19,26 +19,12 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
-import * as Device from 'expo-device';
-
-import Constants from 'expo-constants';
-
-
-
 import {
   Radio,
   Power,
   Shield,
   Calendar,
   Wallet,
-  User,
-  Navigation,
-  Sparkles,
-  PhoneCall,
-  MapPin,
-  Clock,
-  ArrowRight,
-  RefreshCw,
   WifiOff,
   Coffee,
 } from 'lucide-react-native';
@@ -1265,9 +1251,9 @@ function MainChauffeurApp() {
         ? false
         : isExplicitlyYes
         ? true
-        : activeBooking.payment_method === 'cash' || activeBooking.payment_method === 'driver_upi'
+        : activeBooking.payment_method === 'cash' || activeBooking.payment_method === 'driver_upi' || activeBooking.payment_method === 'wallet'
         ? false
-        : activeBooking.payment_status === 'paid' || activeBooking.payment_status === 'paid_online' || activeBooking.payment_method === 'wallet';
+        : activeBooking.payment_status === 'paid' || activeBooking.payment_status === 'paid_online';
 
       updates.payment_status = isPaidOnline ? 'paid' : (extraUpdates?.payment_status || 'pending');
       updates.payment_made = isPaidOnline ? 'yes' : 'no';
@@ -1281,11 +1267,18 @@ function MainChauffeurApp() {
             const { data: deductRes, error: deductErr } = await supabase.rpc('deduct_ride_wallet_payment', {
               _booking_id: activeBooking.id,
             });
-            if (deductErr) {
-              console.warn('Server wallet deduction notice:', deductErr);
+            if (deductErr || !deductRes?.success) {
+              console.warn('Server wallet deduction notice:', deductErr || deductRes?.error);
+              updates.payment_status = 'pending';
+              updates.payment_made = 'no';
+            } else {
+              updates.payment_status = 'paid';
+              updates.payment_made = 'yes';
             }
           } catch (err) {
             console.warn('Wallet deduction call error:', err);
+            updates.payment_status = 'pending';
+            updates.payment_made = 'no';
           }
         }
 
