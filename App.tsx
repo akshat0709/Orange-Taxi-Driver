@@ -15,6 +15,7 @@ import {
   Linking,
   ScrollView,
   Modal,
+  AppState,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -255,10 +256,27 @@ function MainChauffeurApp() {
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsNetworkOffline(state.isConnected === false);
     });
-    registerForDriverPushNotificationsAsync().catch(() => {});
     soundService.configureAudioMode().catch(() => {});
     return () => unsubscribe();
   }, []);
+
+  // Push notifications: save this phone's Expo push token on the chauffeur's record so the
+  // server can alert them about new rides even when the app is closed or the phone is locked.
+  useEffect(() => {
+    const driverId = driver?.id;
+    if (!driverId) return;
+    let cancelled = false;
+    registerForDriverPushNotificationsAsync()
+      .then(async (token) => {
+        if (cancelled || !token || (driverRef.current as any)?.push_token === token) return;
+        const { error } = await supabase.from('drivers').update({ push_token: token }).eq('id', driverId);
+        if (error) console.warn('Could not save push token:', error.message);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [driver?.id]);
 
   // Tunnel Mode / Offline Action Queue Replay
   useEffect(() => {
@@ -953,6 +971,11 @@ function MainChauffeurApp() {
     // Run check immediately on going online
     checkForPendingDispatches();
 
+    // Coming back to the app (e.g. after tapping a ride notification): look for rides straight away.
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') checkForPendingDispatches();
+    });
+
     // Polling fallback every 3 seconds to guarantee no missed rides
     const pollTimer = setInterval(checkForPendingDispatches, 15000);
 
@@ -1075,6 +1098,7 @@ function MainChauffeurApp() {
 
     return () => {
       clearInterval(pollTimer);
+      appStateSub.remove();
       incomingHandlerRef.current = null;
       supabase.removeChannel(searchingChannel);
       supabase.removeChannel(myChannel);

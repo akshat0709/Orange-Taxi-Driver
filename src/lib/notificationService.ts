@@ -1,17 +1,33 @@
 import * as Notifications from 'expo-notifications';
-import { Alert, Platform } from 'react-native';
+import Constants from 'expo-constants';
+import { Alert, AppState, Platform } from 'react-native';
 
 // Configure notification behavior for driver app safely
 try {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-      priority: Notifications.AndroidNotificationPriority.MAX,
-    }),
+    handleNotification: async (notification) => {
+      // Server pushes (new ride, scheduled ride, cancellation) are for when the app is in the
+      // background. While the app is open it already shows its own alert, so stay quiet.
+      const type = (notification.request.content.data as any)?.type;
+      const fromServer = type === 'new_ride' || type === 'scheduled_ride' || type === 'ride_cancelled';
+      if (fromServer && AppState.currentState === 'active') {
+        return {
+          shouldShowAlert: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+      return {
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+        priority: Notifications.AndroidNotificationPriority.MAX,
+      };
+    },
   });
 } catch (err) {
   console.warn('[Driver NotificationService] setNotificationHandler error:', err);
@@ -54,7 +70,14 @@ export async function registerForDriverPushNotificationsAsync(): Promise<string 
       });
     }
 
-    const tokenData = await Notifications.getExpoPushTokenAsync().catch(() => null);
+    const projectId =
+      (Constants.expoConfig?.extra as any)?.eas?.projectId ?? (Constants as any).easConfig?.projectId;
+    const tokenData = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined).catch(
+      (e) => {
+        console.warn('Could not get Expo push token:', e?.message || e);
+        return null;
+      }
+    );
     token = tokenData?.data || null;
   } catch (error) {
     console.warn('Error configuring driver push notifications:', error);
