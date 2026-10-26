@@ -21,6 +21,7 @@ import { Shield, Lock, Mail, Phone, User, Car, Zap, CheckCircle2, Sun, Moon } fr
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
+import { accountStatus } from '../lib/accountStatus';
 import { resolveDriverRowForUser } from '../lib/driverIdentity';
 import { Driver } from '../types';
 
@@ -311,6 +312,26 @@ const handleAadhaarChange = (text: string) => {
           return;
         }
 
+        // "Invalid login credentials" covers both a wrong password and no account at all.
+        if (error.message?.toLowerCase().includes('invalid login credentials')) {
+          const status = await accountStatus(email);
+          if (status === 'none') {
+            setMode('signup');
+            Alert.alert('No Account Found', 'There is no chauffeur account with this email. Please create an account first.');
+            setLoading(false);
+            return;
+          }
+          if (status === 'unconfirmed') {
+            setMode('verify_otp');
+            setOtpDigits('');
+            setResendCooldown(30);
+            supabase.auth.resend({ type: 'signup', email: email.trim() }).catch(() => {});
+            Alert.alert('Email Verification Required', `Please verify your email first. A new code has been sent to ${email.trim()}.`);
+            setLoading(false);
+            return;
+          }
+        }
+
         const storedAttempts = await AsyncStorage.getItem('@orange_driver_attempts');
         let attempts = storedAttempts ? parseInt(storedAttempts, 10) : 0;
         attempts++;
@@ -349,7 +370,7 @@ const handleAadhaarChange = (text: string) => {
           id: driverRowFinal?.id || data.user.id,
           user_id: data.user.id,
           full_name: driverRowFinal?.full_name || data.user.user_metadata?.full_name || 'Orange Chauffeur',
-          phone: driverRowFinal?.phone || data.user.user_metadata?.phone || '+91 98765 43210',
+          phone: driverRowFinal?.phone || data.user.user_metadata?.phone || '',
           city: driverRowFinal?.city || city,
           vehicle_model: driverRowFinal?.vehicle_model || 'No Vehicle Assigned',
           vehicle_number: driverRowFinal?.vehicle_number || '',
@@ -723,7 +744,7 @@ const handleAadhaarChange = (text: string) => {
                     <Phone size={18} color={iconColor} style={{ marginRight: 10 }} />
                     <TextInput
                       style={[styles.textInput, isLight && styles.textInputLight]}
-                      placeholder="+91 98765 43210"
+                      placeholder="10-digit mobile number"
                       placeholderTextColor={placeholderColor}
                       keyboardType="phone-pad"
                       value={phone}

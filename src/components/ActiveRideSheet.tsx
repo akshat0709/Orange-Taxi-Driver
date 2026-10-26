@@ -104,10 +104,14 @@ export function ActiveRideSheet({
 
   function handleCallPassenger() {
     Haptics.selectionAsync();
-    const phone = booking.customer_phone || '9876543210';
+    const phone = booking.customer_phone || '';
+    if (!phone) {
+      Alert.alert('Number Not Available', "The passenger hasn't added a phone number. Use in-app chat instead.");
+      return;
+    }
     Alert.alert(
-      'Passenger Voice Relay',
-      'Connecting call through Orange Privacy Voice Relay. Phone numbers are protected under the DPDP Act, 2023.',
+      'Call Passenger?',
+      'Please use the passenger\'s number only for this ride.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

@@ -868,7 +868,6 @@ function MainChauffeurApp() {
     }
 
     if (!enrichedBooking.customer_name) enrichedBooking.customer_name = 'Executive Passenger';
-    if (!enrichedBooking.customer_phone) enrichedBooking.customer_phone = '+91 98450 00000';
 
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1673,7 +1672,7 @@ function MainChauffeurApp() {
             bookingReference={activeBooking.reference}
             customerName={activeBooking.customer_name || 'Executive Passenger'}
             driverName={driver?.full_name || 'Ramesh Kumar'}
-            driverPhone={driver?.phone || '+91 98765 43210'}
+            driverPhone={driver?.phone || ''}
             currentUserLocation={{
               lat: driverLocation.latitude,
               lng: driverLocation.longitude,

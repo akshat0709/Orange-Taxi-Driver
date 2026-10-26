@@ -80,8 +80,8 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
   }
 
   const handleCallSupport = () => {
-    Linking.openURL('tel:+9118001234567').catch(() => {
-      Alert.alert('Chauffeur Support', 'Toll-free helpline: 1800-123-4567\nActive 24/7 for Orange Taxi Chauffeurs.');
+    Linking.openURL('tel:+917294073222').catch(() => {
+      Alert.alert('Chauffeur Support', 'Helpline: +91 72940 73222 (24x7)\nsupport@orange-taxi.com');
     });
   };
 
@@ -175,7 +175,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
                     <Text style={styles.verifiedTagText}>✓ VERIFIED</Text>
                   </View>
                 </View>
-                <Text style={styles.driverPhone}>{driver.phone || '+91 98765 43210'}</Text>
+                <Text style={styles.driverPhone}>{driver.phone || 'Phone not added'}</Text>
                 <View style={styles.ratingBadgeRow}>
                   <Text style={styles.ratingStar}>★</Text>
                   <Text style={[styles.ratingNumber, isLight && styles.textDark]}>{(driver.rating || 5.0).toFixed(2)}</Text>
@@ -256,7 +256,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
                 <Text style={styles.metricLbl}>All-Time Trips</Text>
               </View>
               <View style={[styles.metricCard, isLight && styles.innerBoxLight]}>
-                <Text style={[styles.metricVal, isLight && styles.textDark]}>{stats?.acceptanceRate || 98}%</Text>
+                <Text style={[styles.metricVal, isLight && styles.textDark]}>{stats?.acceptanceRate != null ? `${stats.acceptanceRate}%` : '—'}</Text>
                 <Text style={styles.metricLbl}>Acceptance</Text>
               </View>
             </View>
