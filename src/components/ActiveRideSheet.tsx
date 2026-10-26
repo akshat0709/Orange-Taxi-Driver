@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   Keyboard, KeyboardAvoidingView,
+  Image,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../lib/supabase';
@@ -34,6 +35,7 @@ import { formatRupees } from '../lib/formatters';
 import { openGoogleMaps, resolveBookingTargetCoords } from '../lib/locationResolver';
 import { clearReturnToAppNotification } from '../lib/notificationService';
 import { UpiQrModal } from './UpiQrModal';
+import { prepareRideQr } from '../lib/upiQr';
 
 export interface CabinPreferences {
   temperature: '19°C' | '21°C' | '23°C';
@@ -94,6 +96,25 @@ export function ActiveRideSheet({
 
   const status = booking.status;
   const cabin = parseCabinPreferences(booking);
+
+  // As soon as the trip ends unpaid, get the UPI QR ready in the background so "Show QR"
+  // opens instantly instead of waiting for Razorpay.
+  const unpaidAtEnd =
+    status === 'completed' &&
+    booking.payment_status !== 'paid' &&
+    booking.payment_status !== 'paid_online' &&
+    String(booking.payment_made ?? '').toLowerCase() !== 'yes' &&
+    booking.payment_made !== true;
+  useEffect(() => {
+    if (!unpaidAtEnd) return;
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        const token = data.session?.access_token;
+        if (token) prepareRideQr(booking.id, token, (url) => Image.prefetch(url));
+      })
+      .catch(() => {});
+  }, [unpaidAtEnd, booking.id]);
 
   function handleOpenGmaps() {
     const coords = resolveBookingTargetCoords(booking);

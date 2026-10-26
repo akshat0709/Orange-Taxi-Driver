@@ -24,8 +24,32 @@ async function call(path: string, accessToken: string, init: any, fetchImpl: Fet
   return body.qr as UpiQr;
 }
 
+// QR codes prepared in the background when a trip ends, so "Show QR" opens instantly.
+const prepared = new Map<string, Promise<UpiQr>>();
+
 export function createRideQr(bookingId: string, accessToken: string, fetchImpl: FetchLike = fetch as any) {
+  const ready = prepared.get(bookingId);
+  if (ready) {
+    prepared.delete(bookingId);
+    return ready.catch(() =>
+      call('/api/qr/ride', accessToken, { method: 'POST', body: JSON.stringify({ bookingId }) }, fetchImpl)
+    );
+  }
   return call('/api/qr/ride', accessToken, { method: 'POST', body: JSON.stringify({ bookingId }) }, fetchImpl);
+}
+
+/** Starts creating the ride's QR (and downloading its image) before the driver asks for it. */
+export function prepareRideQr(
+  bookingId: string,
+  accessToken: string,
+  prefetchImage: (url: string) => Promise<unknown> = async () => {},
+  fetchImpl: FetchLike = fetch as any
+) {
+  if (prepared.has(bookingId)) return;
+  const job = call('/api/qr/ride', accessToken, { method: 'POST', body: JSON.stringify({ bookingId }) }, fetchImpl);
+  job.then((qr) => prefetchImage(qr.image_url)).catch(() => {});
+  job.catch(() => prepared.delete(bookingId));
+  prepared.set(bookingId, job);
 }
 
 export function getQrStatus(qrId: string, accessToken: string, fetchImpl: FetchLike = fetch as any) {
