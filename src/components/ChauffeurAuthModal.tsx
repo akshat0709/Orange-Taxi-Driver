@@ -104,7 +104,7 @@ const handleAadhaarChange = (text: string) => {
   // panel opens with signed URLs. The old code uploaded to the bucket root (now rejected) and saved
   // getPublicUrl() links, which do not work on a private bucket. Same scheme as the web form.
   const uploadKycImage = async (kind: 'photo' | 'dl'): Promise<string | null> => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, base64: true, quality: 0.7 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], base64: true, quality: 0.7 });
     if (result.canceled || !result.assets[0]?.base64) return null;
     const random = Math.random().toString(36).slice(2, 10);
     const path = `applications/${Date.now()}_${kind}_${random}.jpg`;

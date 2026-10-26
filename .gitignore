@@ -11,3 +11,7 @@ npm-debug.*
 web-build/
 .DS_Store
 .env
+
+# generated native folders (rebuilt by `expo prebuild` from app.json)
+/ios
+/android

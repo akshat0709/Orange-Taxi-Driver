@@ -43,7 +43,11 @@
       "adaptiveIcon": {
         "backgroundColor": "#0B0D11",
         "foregroundImage": "./assets/android-icon-foreground.png"
-      }
+      },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "extra": {
       "eas": {
@@ -61,6 +65,14 @@
           "locationWhenInUsePermission": "Allow Orange Driver to use your location for dispatch and tracking.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Orange Chauffeur needs your photo library to upload your profile photo and licence for verification.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ]
     ]
