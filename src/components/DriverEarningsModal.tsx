@@ -28,6 +28,8 @@ import {
 import { supabase } from '../lib/supabase';
 import { Booking, Driver } from '../types';
 import { formatRupees, round2 } from '../lib/formatters';
+import { cashInHand, fareOf, isDriverCollected, partnerLedger, paymentLabel } from '../lib/ledger';
+import { UpiQrModal, UpiQrRequest } from './UpiQrModal';
 
 interface DriverEarningsModalProps {
   visible: boolean;
@@ -50,6 +52,11 @@ export function DriverEarningsModal({
 
   const [completedTrips, setCompletedTrips] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
+  // Same numbers as the website driver console / admin ledgers.
+  const [commissionPct, setCommissionPct] = useState(15);
+  const [cashSettlements, setCashSettlements] = useState<Array<{ amount: number }>>([]);
+  const [commissionSettlements, setCommissionSettlements] = useState<Array<{ amount: number; direction?: string | null }>>([]);
+  const [payRequest, setPayRequest] = useState<UpiQrRequest | null>(null);
 
   // Check if driver is company employed or partner driver
   const isCompanyDriver = driver?.driver_type !== 'partner';
@@ -74,6 +81,15 @@ export function DriverEarningsModal({
       if (data) {
         setCompletedTrips(data as Booking[]);
       }
+      const [ps, cs, ms] = await Promise.all([
+        supabase.from('pricing_settings').select('partner_commission_percent').eq('id', 1).maybeSingle(),
+        supabase.from('driver_cash_settlements').select('amount').eq('driver_id', driverId),
+        supabase.from('driver_commission_settlements').select('amount, direction').eq('driver_id', driverId),
+      ]);
+      const pct = Number((ps.data as any)?.partner_commission_percent);
+      if (Number.isFinite(pct)) setCommissionPct(pct);
+      if (cs.data) setCashSettlements(cs.data as any);
+      if (ms.data) setCommissionSettlements(ms.data as any);
     } catch (e) {
       console.error('Failed to load trips:', e);
     } finally {
@@ -131,26 +147,23 @@ export function DriverEarningsModal({
   const ridesToNext = Math.max(0, nextMilestoneRides - monthlyCompletedRides);
   const milestoneProgress = Math.min(100, Math.max(0, (monthlyCompletedRides / 250) * 100));
 
-  // Partner Driver Fares
-  const todayRaw = todayTrips.reduce(
-    (acc, t) => acc + (Number(t.final_fare) || Number(t.estimated_fare) || 0),
-    0
-  );
-  const todayEarnings = round2(todayRaw * 0.85);
+  // Partner (commission) driver: keeps (100 - commission)% of every fare. The rate is set by the
+  // admin (Admin → Pricing) instead of a hard-coded 15%.
+  const keepShare = Math.max(0, 100 - commissionPct) / 100;
+  const todayLedger = partnerLedger(todayTrips, [], commissionPct);
+  const todayEarnings = round2(todayLedger.driverEarnings);
+  const allTimeEarnings = round2(partnerLedger(completedTrips, [], commissionPct).driverEarnings);
+  const ledger = partnerLedger(completedTrips, commissionSettlements, commissionPct);
 
-  const allRawTotal = completedTrips.reduce(
-    (acc, t) => acc + (Number(t.final_fare) || Number(t.estimated_fare) || 0),
-    0
-  );
-  const allTimeEarnings = round2(allRawTotal * 0.85);
-
+  // Money the driver collected themselves today (cash / own UPI). UPI QR rides went to Orange Taxi.
   const cashToday = round2(
-    todayTrips
-      .filter((t) => t.payment_method === 'cash')
-      .reduce((acc, t) => acc + (Number(t.final_fare) || Number(t.estimated_fare) || 0), 0)
+    todayTrips.filter((t) => isDriverCollected(t.payment_method)).reduce((acc, t) => acc + fareOf(t), 0)
   );
+  // Driver's share of today's online / QR / wallet rides (paid out by Orange Taxi).
+  const digitalToday = round2(todayLedger.onlineFare * keepShare);
 
-  const digitalToday = round2(Math.max(0, todayEarnings - cashToday));
+  // Company driver: cash in hand to hand in.
+  const cash = cashInHand(completedTrips, cashSettlements);
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
@@ -340,6 +353,41 @@ export function DriverEarningsModal({
                   </View>
                 </View>
               </View>
+
+              {/* Commission ledger (same as Admin → Commission Ledger) */}
+              <View style={[styles.ledgerCard, isDark && styles.breakdownItemDark]}>
+                <Text style={styles.breakdownLabel}>
+                  Commission ledger · {commissionPct}% to Orange Taxi
+                </Text>
+                <Text
+                  style={[
+                    styles.ledgerBalance,
+                    { color: ledger.balance > 0 ? '#F97316' : '#10B981' },
+                  ]}
+                >
+                  {ledger.balance > 0
+                    ? `You owe Orange Taxi ₹${formatRupees(ledger.balance)}`
+                    : ledger.balance < 0
+                    ? `Orange Taxi owes you ₹${formatRupees(-ledger.balance)}`
+                    : 'All settled ✓'}
+                </Text>
+                <Text style={styles.ledgerSub}>
+                  Commission on cash rides ₹{formatRupees(ledger.commissionOnCash)} · Your share of
+                  online rides ₹{formatRupees(ledger.driverShareOnline)} · Paid ₹
+                  {formatRupees(ledger.paidByDriver)} · Received ₹{formatRupees(ledger.paidToDriver)}
+                </Text>
+                {ledger.balance > 0 && (
+                  <TouchableOpacity
+                    style={styles.ledgerPayBtn}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setPayRequest({ kind: 'commission', driverId, amount: ledger.balance });
+                    }}
+                  >
+                    <Text style={styles.ledgerPayBtnText}>PAY ₹{formatRupees(ledger.balance)} BY UPI</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           )}
 
@@ -371,6 +419,38 @@ export function DriverEarningsModal({
               </View>
             </View>
           )}
+
+          {/* Cash in hand to hand in (same as Admin → Cash Settlements) */}
+          {isCompanyDriver && (
+            <View style={[styles.ledgerCard, isDark && styles.breakdownItemDark]}>
+              <Text style={styles.breakdownLabel}>Cash in hand to hand in</Text>
+              <Text style={[styles.ledgerBalance, { color: cash.holding > 0 ? '#F97316' : '#10B981' }]}>
+                {cash.holding > 0 ? `₹${formatRupees(cash.holding)}` : 'Nothing to hand in ✓'}
+              </Text>
+              <Text style={styles.ledgerSub}>
+                Collected ₹{formatRupees(cash.collected)} · Handed in ₹{formatRupees(cash.handed)}. UPI QR and
+                online rides are paid to Orange Taxi and don't count.
+              </Text>
+              {cash.holding > 0 && (
+                <TouchableOpacity
+                  style={styles.ledgerPayBtn}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setPayRequest({ kind: 'cash_deposit', driverId, amount: cash.holding });
+                  }}
+                >
+                  <Text style={styles.ledgerPayBtnText}>HAND IN ₹{formatRupees(cash.holding)} BY UPI</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          <UpiQrModal
+            request={payRequest}
+            title={payRequest?.kind === 'commission' ? 'Pay commission by UPI' : 'Hand in cash by UPI'}
+            onClose={() => setPayRequest(null)}
+            onPaid={() => fetchTrips()}
+          />
         </View>
 
         {/* Trips History Ledger */}
@@ -401,7 +481,7 @@ export function DriverEarningsModal({
                     <Text style={styles.tripMeta}>
                       {item.completed_at
                         ? new Date(item.completed_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-                        : 'Today'} · {Number(item.distance_km || 0).toFixed(1)} km · {item.payment_method === 'cash' ? '💵 Cash' : '💳 Digital'}
+                        : 'Today'} · {Number(item.distance_km || 0).toFixed(1)} km · {paymentLabel(item.payment_method)}
                     </Text>
                   </View>
                   <Text style={styles.tripFare}>
@@ -423,6 +503,24 @@ function Car({ size, color }: { size: number; color: string }) {
 }
 
 const styles = StyleSheet.create({
+  ledgerCard: {
+    marginTop: 12,
+    borderRadius: 16,
+    padding: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.08)',
+  },
+  ledgerBalance: { fontSize: 18, fontWeight: '900', marginTop: 4 },
+  ledgerSub: { fontSize: 11, color: '#64748B', marginTop: 4, lineHeight: 16 },
+  ledgerPayBtn: {
+    marginTop: 10,
+    backgroundColor: '#F97316',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  ledgerPayBtnText: { color: '#FFFFFF', fontWeight: '800', letterSpacing: 0.5 },
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   containerDark: { backgroundColor: '#0B0F19' },
   header: {

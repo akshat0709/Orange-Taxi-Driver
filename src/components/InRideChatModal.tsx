@@ -296,7 +296,9 @@ export function InRideChatModal({
       }
 
       channel = supabase.channel(`ride-chat-${bookingId}`, {
-        config: { broadcast: { self: false, ack: true } },
+        // Private channel: Realtime Authorization (RLS on realtime.messages, migration
+        // 20261025130000) admits only this ride's passenger and chauffeur.
+        config: { private: true, broadcast: { self: false, ack: true } },
       });
 
       channel

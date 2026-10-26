@@ -175,7 +175,7 @@ export function IncomingRideModal({
             <View style={[styles.metricItem, isDark && styles.metricItemDark]}>
               <ShieldCheck size={14} color="#10B981" />
               <Text style={[styles.metricText, isDark && styles.textWhite]}>
-                Zero Surge Locked
+                Fare shown to rider
               </Text>
             </View>
           </View>

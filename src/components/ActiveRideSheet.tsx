@@ -33,6 +33,7 @@ import { Booking } from '../types';
 import { formatRupees } from '../lib/formatters';
 import { openGoogleMaps, resolveBookingTargetCoords } from '../lib/locationResolver';
 import { clearReturnToAppNotification } from '../lib/notificationService';
+import { UpiQrModal } from './UpiQrModal';
 
 export interface CabinPreferences {
   temperature: '19°C' | '21°C' | '23°C';
@@ -87,6 +88,9 @@ export function ActiveRideSheet({
   const [enteredOtp, setEnteredOtp] = useState('');
   const [otpError, setOtpError] = useState(false);
   const [cashConfirmed, setCashConfirmed] = useState(false);
+  // UPI: a Razorpay QR that pays Orange Taxi directly (recorded by the server, not by this app).
+  const [qrBookingId, setQrBookingId] = useState<string | null>(null);
+  const [paidByQr, setPaidByQr] = useState(false);
 
   const status = booking.status;
   const cabin = parseCabinPreferences(booking);
@@ -129,7 +133,8 @@ export function ActiveRideSheet({
     try {
       let verified = false;
 
-      // Strictly enforce server-side cryptographic OTP verification
+      // Server-side OTP verification only. This used to fail OPEN: if the RPC was missing
+      // ("schema cache" error) any code was accepted and the ride started without the passenger.
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(booking.id);
       if (isUuid) {
         const { data, error } = await supabase.rpc('verify_ride_otp', {
@@ -139,9 +144,11 @@ export function ActiveRideSheet({
 
         if (!error && data?.success) {
           verified = true;
-        } else if (error && error.message && error.message.includes('schema cache')) {
-          console.warn('verify_ride_otp RPC not found in schema cache. Allowing transition fallback.');
-          verified = true;
+        } else if (error) {
+          setOtpError(true);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          Alert.alert('Verification Unavailable', 'The OTP could not be verified with the server. Check your connection and try again.');
+          return;
         } else if (data?.error) {
           setOtpError(true);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -165,6 +172,32 @@ export function ActiveRideSheet({
     } catch (err: any) {
       setOtpError(true);
       Alert.alert('Error', err?.message || 'Could not verify OTP with server.');
+    }
+  }
+
+  // Records money the chauffeur collected directly. Errors used to be swallowed after the button
+  // had already switched to "READY FOR NEXT RIDE", leaving the booking unpaid in the database.
+  async function recordDirectPayment(method: 'cash') {
+    try {
+      let { error } = await supabase
+        .from('bookings')
+        .update({ payment_method: method, payment_status: 'paid', payment_made: 'yes' })
+        .eq('id', booking.id);
+      if (error && error.message && error.message.includes('payment_made')) {
+        ({ error } = await supabase
+          .from('bookings')
+          .update({ payment_method: method, payment_status: 'paid' })
+          .eq('id', booking.id));
+      }
+      if (error) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert('Payment Not Recorded', error.message || 'Please check your connection and try again.');
+        return;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setCashConfirmed(true);
+    } catch (e: any) {
+      Alert.alert('Payment Not Recorded', e?.message || 'Please check your connection and try again.');
     }
   }
 
@@ -453,6 +486,14 @@ export function ActiveRideSheet({
       )}
 
       {/* Stage 4: Trip Completed & Payment Collection */}
+      <UpiQrModal
+        bookingId={qrBookingId}
+        onClose={() => setQrBookingId(null)}
+        onPaid={() => {
+          setPaidByQr(true);
+          setCashConfirmed(true);
+        }}
+      />
       {status === 'completed' && (
         <View>
           <View style={styles.completedHeader}>
@@ -467,7 +508,9 @@ export function ActiveRideSheet({
             const rawPaymentMade = String(booking.payment_made ?? '').trim().toLowerCase();
             const isExplicitlyNo = rawPaymentMade === 'no' || booking.payment_made === false;
             const isExplicitlyYes = rawPaymentMade === 'yes' || booking.payment_made === true;
-            const isPaidOnline = isExplicitlyNo
+            const isPaidOnline = paidByQr || booking.payment_method === 'upi_qr'
+              ? true
+              : isExplicitlyNo
               ? false
               : isExplicitlyYes
               ? true
@@ -479,13 +522,17 @@ export function ActiveRideSheet({
               <>
                 <View style={[styles.settlementCard, isDark && styles.settlementCardDark]}>
                   <View style={styles.fareRow}>
-                    <Text style={styles.fareLabel}>Trip Fare (Zero Surge)</Text>
+                    <Text style={styles.fareLabel}>Trip Fare</Text>
                     <Text style={[styles.fareValue, isDark && styles.textWhite]}>₹{formatRupees(booking.estimated_fare)}</Text>
                   </View>
                   <View style={styles.fareRow}>
                     <Text style={styles.fareLabel}>Payment Status</Text>
                     <Text style={[styles.fareValue, { color: isPaidOnline ? '#10B981' : '#F97316' }]}>
-                      {isPaidOnline ? 'Payment was made online' : 'Payment to be collected'}
+                      {paidByQr || booking.payment_method === 'upi_qr'
+                        ? 'Paid by UPI QR'
+                        : isPaidOnline
+                        ? 'Payment was made online'
+                        : 'Payment to be collected'}
                     </Text>
                   </View>
 
@@ -493,7 +540,7 @@ export function ActiveRideSheet({
                     <View style={styles.cashNoticeBox}>
                       <Banknote size={18} color="#F97316" />
                       <Text style={styles.cashNoticeText}>
-                        Payment to be collected: ₹{formatRupees(booking.estimated_fare)} directly from the passenger.
+                        Payment to be collected: ₹{formatRupees(booking.estimated_fare)} directly from the passenger.{Number((booking as any).dues_amount) > 0 ? ` Includes ₹${formatRupees((booking as any).dues_amount)} cancellation fee from the passenger's earlier ride.` : ''}
                       </Text>
                     </View>
                   ) : (
@@ -513,46 +560,19 @@ export function ActiveRideSheet({
                     </Text>
                     <TouchableOpacity
                       style={[styles.confirmCashBtn, { backgroundColor: '#10B981' }]}
-                      onPress={async () => {
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                        setCashConfirmed(true);
-                        try {
-                          const { error } = await supabase
-                            .from('bookings')
-                            .update({ payment_method: 'cash', payment_status: 'paid', payment_made: 'yes' })
-                            .eq('id', booking.id);
-                          if (error && error.message && error.message.includes('payment_made')) {
-                            await supabase
-                              .from('bookings')
-                              .update({ payment_method: 'cash', payment_status: 'paid' })
-                              .eq('id', booking.id);
-                          }
-                        } catch (e) {}
-                      }}
+                      onPress={() => recordDirectPayment('cash')}
                     >
                       <Text style={styles.confirmCashBtnText}>CASH RECEIVED (₹{formatRupees(booking.estimated_fare)})</Text>
                     </TouchableOpacity>
                     
                     <TouchableOpacity
                       style={[styles.confirmCashBtn, { backgroundColor: '#3B82F6' }]}
-                      onPress={async () => {
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                        setCashConfirmed(true);
-                        try {
-                          const { error } = await supabase
-                            .from('bookings')
-                            .update({ payment_method: 'driver_upi', payment_status: 'paid', payment_made: 'yes' })
-                            .eq('id', booking.id);
-                          if (error && error.message && error.message.includes('payment_made')) {
-                            await supabase
-                              .from('bookings')
-                              .update({ payment_method: 'driver_upi', payment_status: 'paid' })
-                              .eq('id', booking.id);
-                          }
-                        } catch (e) {}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setQrBookingId(booking.id);
                       }}
                     >
-                      <Text style={styles.confirmCashBtnText}>MY PERSONAL UPI (₹{formatRupees(booking.estimated_fare)})</Text>
+                      <Text style={styles.confirmCashBtnText}>UPI – SHOW QR (₹{formatRupees(booking.estimated_fare)})</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (

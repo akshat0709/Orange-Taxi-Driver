@@ -1,4 +1,5 @@
 import "./src/i18n";
+import { SignedImage } from './src/components/SignedImage';
 import React, { Component, ErrorInfo, ReactNode, useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
@@ -47,6 +48,8 @@ import { resolveBookingTargetCoords } from './src/lib/locationResolver';
 import { detectCityFromCoords } from './src/lib/city-detector';
 import { registerForDriverPushNotificationsAsync, sendDriverLocalNotification } from './src/lib/notificationService';
 import { getTodayOnlineDutySeconds, recordChauffeurOnline, recordChauffeurOffline } from './src/lib/dutyTracker';
+import { resolveDriverRowForUser } from './src/lib/driverIdentity';
+import { isMissingRpcError, isNetworkError, REPLAYABLE_FROM_STATUSES } from './src/lib/supabaseErrors';
 
 import * as TaskManager from 'expo-task-manager';
 
@@ -84,6 +87,14 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
   }
 });
 
+
+async function stopBackgroundLocationUpdates() {
+  try {
+    if (await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)) {
+      await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+    }
+  } catch (e) {}
+}
 
 const { width } = Dimensions.get('window');
 
@@ -257,15 +268,38 @@ function MainChauffeurApp() {
       try {
         const stored = await AsyncStorage.getItem('@orange_offline_action_queue');
         if (!stored) return;
-        const queue: Array<{ bookingId: string; updates: any }> = JSON.parse(stored);
+        const queue: Array<{ bookingId: string; updates: any; timestamp?: number }> = JSON.parse(stored);
         if (!Array.isArray(queue) || queue.length === 0) return;
 
+        // supabase-js returns errors instead of throwing, so the old loop dropped every failed item
+        // and cleared the whole queue. It also replayed unconditionally, so a queued "arrived" or
+        // "completed" could overwrite a booking the rider had cancelled meanwhile.
+        const remaining: typeof queue = [];
         for (const item of queue) {
           try {
-            await supabase.from('bookings').update(item.updates).eq('id', item.bookingId);
-          } catch (e) {}
+            const { error } = await supabase
+              .from('bookings')
+              .update(item.updates)
+              .eq('id', item.bookingId)
+              .in('status', REPLAYABLE_FROM_STATUSES as unknown as string[]);
+            if (error && isNetworkError(error)) remaining.push(item);
+            // Non-network errors (RLS, invalid transition) are permanent: drop the item.
+          } catch (e) {
+            remaining.push(item);
+          }
         }
-        await AsyncStorage.removeItem('@orange_offline_action_queue');
+
+        // Merge with anything queued while this replay was running.
+        const latestStored = await AsyncStorage.getItem('@orange_offline_action_queue');
+        const latest: typeof queue = latestStored ? JSON.parse(latestStored) : [];
+        const processed = new Set(queue.map((q) => `${q.bookingId}:${q.timestamp ?? ''}:${JSON.stringify(q.updates)}`));
+        const added = latest.filter((q) => !processed.has(`${q.bookingId}:${q.timestamp ?? ''}:${JSON.stringify(q.updates)}`));
+        const next = [...remaining, ...added];
+        if (next.length > 0) {
+          await AsyncStorage.setItem('@orange_offline_action_queue', JSON.stringify(next));
+        } else {
+          await AsyncStorage.removeItem('@orange_offline_action_queue');
+        }
       } catch (e) {}
     };
 
@@ -548,67 +582,9 @@ function MainChauffeurApp() {
     try {
       let driverProfile: Driver | null = null;
 
-      // Primary: look up by user_id
-      const { data: driverRow } = await supabase
-        .from('drivers')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      // Fallback: driver was approved before user_id was stored — match by email or phone
-      let resolvedRow = driverRow;
-      if (!resolvedRow) {
-        const userEmail = user.email || '';
-        const userPhone = user.phone || user.user_metadata?.phone || '';
-
-        // Try match by email via profiles table first
-        if (userEmail) {
-          const { data: byEmail } = await supabase
-            .from('drivers')
-            .select('*')
-            .ilike('phone', userPhone ? userPhone.replace(/\D/g, '') + '%' : '')
-            .maybeSingle();
-          // Also try joining through profiles
-          const { data: profileRow } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('email', userEmail)
-            .maybeSingle();
-          if (profileRow) {
-            const { data: byProfileId } = await supabase
-              .from('drivers')
-              .select('*')
-              .eq('user_id', profileRow.id)
-              .maybeSingle();
-            if (byProfileId) resolvedRow = byProfileId;
-          }
-        }
-
-        // Try match by phone number digits
-        if (!resolvedRow && userPhone) {
-          const digits = userPhone.replace(/\D/g, '');
-          const { data: allDrivers } = await supabase
-            .from('drivers')
-            .select('*')
-            .limit(200);
-          if (allDrivers) {
-            resolvedRow = allDrivers.find((d: any) =>
-              d.phone && d.phone.replace(/\D/g, '').endsWith(digits.slice(-10))
-            ) || null;
-          }
-        }
-
-        // Self-heal: write user_id back so next login works instantly
-        if (resolvedRow && !resolvedRow.user_id) {
-          await supabase
-            .from('drivers')
-            .update({ user_id: user.id })
-            .eq('id', resolvedRow.id);
-          resolvedRow.user_id = user.id;
-        }
-      }
-
-      const driverRowFinal = resolvedRow;
+      // Only rows linked to this account (or a legacy row matched on the auth-verified phone) are
+      // accepted. See src/lib/driverIdentity.ts for why the old phone-metadata fallback was removed.
+      const driverRowFinal: any = await resolveDriverRowForUser(supabase, user);
 
       if (driverRowFinal) {
         driverProfile = {
@@ -678,6 +654,8 @@ function MainChauffeurApp() {
         locationSubscription.current.remove();
         locationSubscription.current = null;
       }
+      // The background task (and its foreground-service notification) was never stopped.
+      stopBackgroundLocationUpdates();
       return;
     }
 
@@ -799,15 +777,46 @@ function MainChauffeurApp() {
     };
   }, [isOnline]);
 
+  // Latest values for long-lived timers and realtime handlers. Putting the state itself in effect
+  // dependencies tore down and rebuilt the dispatch channel and heartbeat on every GPS fix (~5 s).
+  const driverLocationRef = useRef(driverLocation);
+  driverLocationRef.current = driverLocation;
+  const activeBookingRef = useRef<Booking | null>(activeBooking);
+  activeBookingRef.current = activeBooking;
+  const incomingBookingRef = useRef<Booking | null>(incomingBooking);
+  incomingBookingRef.current = incomingBooking;
+  const declinedBookingIdsRef = useRef<string[]>(declinedBookingIds);
+  declinedBookingIdsRef.current = declinedBookingIds;
+  const incomingHandlerRef = useRef<((payload: any) => Promise<void>) | null>(null);
+
+  // Pre-accepted scheduled rides live in the database (they were only kept in memory before).
+  const loadClaimedScheduledRides = async (driverId?: string) => {
+    if (!driverId) return;
+    const { data } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('driver_id', driverId)
+      .eq('status', 'scheduled')
+      .order('scheduled_at', { ascending: true });
+    setClaimedScheduledRides((data as Booking[]) || []);
+  };
+  useEffect(() => {
+    loadClaimedScheduledRides(driver?.id);
+  }, [driver?.id]);
+
   // 3. Periodic Driver Telemetry Sync to Supabase Database
   useEffect(() => {
-    if (!driver || !isOnline || !driverLocation) return;
+    if (!driver?.id || !isOnline) return;
 
     if (locationUpdateTimer.current) {
       clearInterval(locationUpdateTimer.current);
     }
 
+    // Previously keyed on driverLocation: the 8 s interval was recreated every ~5 s and never fired.
     locationUpdateTimer.current = setInterval(async () => {
+      const driver = driverRef.current;
+      const driverLocation = driverLocationRef.current;
+      if (!driver || !driverLocation) return;
       try {
         const detectedCity = detectCityFromCoords(driverLocation.latitude, driverLocation.longitude, driver.city);
         await supabase
@@ -831,12 +840,12 @@ function MainChauffeurApp() {
         clearInterval(locationUpdateTimer.current);
       }
     };
-  }, [driver, isOnline, driverLocation]);
+  }, [driver?.id, isOnline]);
 
   // Helper: Trigger Incoming Ride with Passenger Profile Enrichment and Dispatch Sound
   const triggerIncomingBookingAlert = async (booking: Booking) => {
     // Avoid double triggering if already ringing for the same booking
-    if (incomingBooking?.id === booking.id) return;
+    if (incomingBookingRef.current?.id === booking.id || activeBookingRef.current) return;
 
     let enrichedBooking: Booking = { ...booking };
 
@@ -866,8 +875,12 @@ function MainChauffeurApp() {
     } catch {}
 
     // Play energetic alert chime immediately
-    await soundService.playDispatchAlert();
+    // Re-check after the async profile lookup: another dispatch may have been shown meanwhile.
+    if (incomingBookingRef.current || activeBookingRef.current) return;
+    incomingBookingRef.current = enrichedBooking;
+    // Commit state before awaiting the chime so a re-render cannot reset the ref to null mid-alert.
     setIncomingBooking(enrichedBooking);
+    await soundService.playDispatchAlert();
 
     // Send local push notification
     sendDriverLocalNotification(
@@ -879,11 +892,13 @@ function MainChauffeurApp() {
 
   // 4. Supabase Realtime Channel & Polling Fallback for Incoming Passenger Dispatches
   useEffect(() => {
-    if (!isOnline || !driver) return;
+    if (!isOnline || !driver?.id) return;
 
     // Check for pending unassigned dispatches from Supabase
     const checkForPendingDispatches = async () => {
-      if (activeBooking || incomingBooking) return;
+      const driver = driverRef.current;
+      const driverLocation = driverLocationRef.current;
+      if (!driver || activeBookingRef.current || incomingBookingRef.current) return;
       try {
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
         const { data: searchingBookings, error } = await supabase
@@ -924,7 +939,8 @@ function MainChauffeurApp() {
               if (dec.count === 1 && (now - dec.lastDeclinedAt < 30000)) continue;
             }
 
-            if (!activeBooking && !incomingBooking) {
+            if (declinedBookingIdsRef.current.includes(candidate.id)) continue;
+            if (!activeBookingRef.current && !incomingBookingRef.current) {
               await triggerIncomingBookingAlert(candidate);
               break;
             }
@@ -942,18 +958,17 @@ function MainChauffeurApp() {
     const pollTimer = setInterval(checkForPendingDispatches, 15000);
 
     // Supabase Realtime Channel for Instant Broadcasts
-    const channel = supabase
-      .channel('driver-booking-broadcasts')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bookings',
-        },
-        async (payload) => {
+    // One handler, three filtered subscriptions (instead of every booking change RLS allowed):
+    //   searching rides, this chauffeur's own bookings, and the ride currently ringing (below).
+    const handleBookingChange = async (payload: any) => {
           const newBooking = payload.new as Booking;
           if (!newBooking) return;
+          const driver = driverRef.current;
+          const driverLocation = driverLocationRef.current;
+          const activeBooking = activeBookingRef.current;
+          const incomingBooking = incomingBookingRef.current;
+          const declinedBookingIds = declinedBookingIdsRef.current;
+          if (!driver) return;
 
           // If a new booking is searching and not assigned
           if (
@@ -1003,12 +1018,13 @@ function MainChauffeurApp() {
               Alert.alert('Trip Cancelled', 'The passenger has cancelled this request.');
             }
             if (activeBooking && newBooking.id === activeBooking.id) {
-              sendDriverLocalNotification(
-                '❌ Ride Cancelled by Passenger',
-                'The passenger has cancelled this booking.',
-                { bookingId: newBooking.id }
-              );
-              Alert.alert('Trip Cancelled', 'The passenger has cancelled this booking.');
+              // The server sets cancellation_fee when the passenger cancels late (admin Pricing rule).
+              const fee = Number((newBooking as any).cancellation_fee) || 0;
+              const msg = fee > 0
+                ? `The passenger has cancelled this booking. A ₹${fee} cancellation fee applies.`
+                : 'The passenger has cancelled this booking.';
+              sendDriverLocalNotification('❌ Ride Cancelled by Passenger', msg, { bookingId: newBooking.id });
+              Alert.alert('Trip Cancelled', msg);
               setActiveBooking(null);
             }
           }
@@ -1034,15 +1050,52 @@ function MainChauffeurApp() {
           if (activeBooking && newBooking.id === activeBooking.id && newBooking.status !== 'cancelled') {
             setActiveBooking((prev) => prev ? { ...prev, ...newBooking } : prev);
           }
-        }
-      )
+
+          // A pre-accepted scheduled ride was dispatched to this chauffeur by the server.
+          if (
+            !activeBooking &&
+            newBooking.driver_id === driver.id &&
+            newBooking.status === 'accepted' &&
+            (payload.old as any)?.status === 'scheduled'
+          ) {
+            setActiveBooking(newBooking);
+            setClaimedScheduledRides((prev) => prev.filter((b) => b.id !== newBooking.id));
+            sendDriverLocalNotification('📅 Scheduled ride starting', `Proceed to pickup: ${newBooking.pickup_area}`, { bookingId: newBooking.id });
+          }
+    };
+
+    const searchingChannel = supabase
+      .channel('driver-dispatch-searching')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings', filter: 'status=eq.searching' }, handleBookingChange)
       .subscribe();
+    const myChannel = supabase
+      .channel(`driver-my-bookings-${driver.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings', filter: `driver_id=eq.${driver.id}` }, handleBookingChange)
+      .subscribe();
+    incomingHandlerRef.current = handleBookingChange;
 
     return () => {
       clearInterval(pollTimer);
-      supabase.removeChannel(channel);
+      incomingHandlerRef.current = null;
+      supabase.removeChannel(searchingChannel);
+      supabase.removeChannel(myChannel);
     };
-  }, [isOnline, driver, driverLocation, activeBooking, incomingBooking, declinedBookingIds]);
+  }, [isOnline, driver?.id]);
+
+  // The ringing request: watch just that booking (cancelled by passenger / taken by another chauffeur).
+  useEffect(() => {
+    const id = incomingBooking?.id;
+    if (!id) return;
+    const ch = supabase
+      .channel(`driver-incoming-${id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bookings', filter: `id=eq.${id}` }, (payload) => {
+        incomingHandlerRef.current?.(payload);
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [incomingBooking?.id]);
 
   // Toggle Online/Offline in Supabase
   const handleToggleOnline = async () => {
@@ -1059,6 +1112,7 @@ function MainChauffeurApp() {
       await recordChauffeurOffline();
       await soundService.stopDispatchAlert();
       setIncomingBooking(null);
+      await stopBackgroundLocationUpdates();
     }
 
     if (driver) {
@@ -1127,6 +1181,14 @@ function MainChauffeurApp() {
           `Proceed to pickup bay: ${booking.pickup_area}`,
           { bookingId: booking.id }
         );
+        return;
+      }
+
+      // A real RPC error (driver suspended, booking invalid, etc.) is a server decision. Falling back
+      // to a direct table update would bypass it, so the fallback is reserved for "RPC not deployed".
+      if (rpcErr && !isMissingRpcError(rpcErr)) {
+        console.warn('accept_booking rejected:', rpcErr);
+        Alert.alert('Unable to Accept', rpcErr.message || 'The server rejected this ride. Please try the next one.');
         return;
       }
 
@@ -1216,28 +1278,54 @@ function MainChauffeurApp() {
       } catch (e) {}
     };
 
+    // Writes a transition. supabase-js reports failures via `error` (it does not throw), so the old
+    // try/catch never queued offline updates and never noticed rejected ones. The status guard stops a
+    // stale update from overwriting a booking the rider has since cancelled.
+    // Returns false when the server rejected the change (caller must not advance the UI).
+    const persistTransition = async (upd: Partial<Booking>): Promise<boolean> => {
+      if (isNetworkOffline) {
+        await enqueueOffline(activeBooking.id, upd);
+        return true;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('bookings')
+          .update(upd)
+          .eq('id', activeBooking.id)
+          .in('status', REPLAYABLE_FROM_STATUSES as unknown as string[])
+          .select('id, status')
+          .maybeSingle();
+        if (error) {
+          if (isNetworkError(error)) {
+            await enqueueOffline(activeBooking.id, upd);
+            return true;
+          }
+          if (error.message && error.message.includes('payment_made') && 'payment_made' in upd) {
+            const safe = { ...upd };
+            delete (safe as any).payment_made;
+            return persistTransition(safe);
+          }
+          Alert.alert('Update Failed', error.message || 'The trip status could not be updated.');
+          return false;
+        }
+        if (!data) {
+          Alert.alert('Trip Unavailable', 'This trip was cancelled or changed by the passenger or dispatch.');
+          setActiveBooking(null);
+          return false;
+        }
+        return true;
+      } catch {
+        await enqueueOffline(activeBooking.id, upd);
+        return true;
+      }
+    };
+
     if (newStatus === 'arrived') {
       updates.arrived_at = new Date().toISOString();
-      if (isNetworkOffline) {
-        await enqueueOffline(activeBooking.id, updates);
-      } else {
-        try {
-          await supabase.from('bookings').update(updates).eq('id', activeBooking.id);
-        } catch {
-          await enqueueOffline(activeBooking.id, updates);
-        }
-      }
+      if (!(await persistTransition(updates))) return;
     } else if (newStatus === 'in_progress') {
       updates.started_at = new Date().toISOString();
-      if (isNetworkOffline) {
-        await enqueueOffline(activeBooking.id, updates);
-      } else {
-        try {
-          await supabase.from('bookings').update(updates).eq('id', activeBooking.id);
-        } catch {
-          await enqueueOffline(activeBooking.id, updates);
-        }
-      }
+      if (!(await persistTransition(updates))) return;
     } else if (newStatus === 'completed') {
       const finalFare = round2(activeBooking.final_fare || activeBooking.estimated_fare);
       updates.completed_at = new Date().toISOString();
@@ -1283,16 +1371,7 @@ function MainChauffeurApp() {
         }
 
         // Persist directly to Supabase bookings table
-        try {
-          const { error: updErr } = await supabase.from('bookings').update(updates).eq('id', activeBooking.id);
-          if (updErr && updErr.message && updErr.message.includes('payment_made')) {
-            const safeUpdates = { ...updates };
-            delete safeUpdates.payment_made;
-            await supabase.from('bookings').update(safeUpdates).eq('id', activeBooking.id);
-          }
-        } catch {
-          await enqueueOffline(activeBooking.id, updates);
-        }
+        if (!(await persistTransition(updates))) return;
 
         // Re-fetch driver's real today stats directly from Supabase
         const currentDriverId = activeBooking.driver_id || driver?.id;
@@ -1468,7 +1547,7 @@ function MainChauffeurApp() {
                 activeOpacity={0.7}
               >
                 {driver?.photo_url ? (
-                  <Image source={{ uri: driver.photo_url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  <SignedImage uri={driver.photo_url} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                 ) : (
                   <Text style={styles.avatarLetter}>
                     {driver?.full_name ? driver.full_name.charAt(0).toUpperCase() : 'R'}
@@ -1615,7 +1694,10 @@ function MainChauffeurApp() {
         {/* Scheduled Rides Modal */}
         <ScheduledRidesModal
           visible={showScheduledModal}
-          onClose={() => setShowScheduledModal(false)}
+          onClose={() => {
+            setShowScheduledModal(false);
+            loadClaimedScheduledRides(driver?.id);
+          }}
           driverId={driver?.id!}
           onClaimScheduledRide={handleClaimScheduledRide}
           theme={theme}
@@ -1638,6 +1720,20 @@ function MainChauffeurApp() {
             stats={stats}
             onClose={() => setShowProfileModal(false)}
             onLogout={async () => {
+              // Mark offline while the session can still write; afterwards RLS blocks the update and
+              // the chauffeur stayed "online" (visible to riders and dispatch) indefinitely.
+              const loggingOutDriverId = driverRef.current?.id;
+              if (loggingOutDriverId) {
+                try {
+                  await supabase
+                    .from('drivers')
+                    .update({ is_online: false, updated_at: new Date().toISOString() })
+                    .eq('id', loggingOutDriverId);
+                } catch (e) {}
+              }
+              await recordChauffeurOffline().catch(() => {});
+              await soundService.stopDispatchAlert().catch(() => {});
+              await stopBackgroundLocationUpdates();
               await supabase.auth.signOut();
               await AsyncStorage.removeItem('orange_taxi_driver');
               setShowProfileModal(false);
@@ -1681,11 +1777,13 @@ function MainChauffeurApp() {
               </Text>
               <TouchableOpacity
                 style={styles.advisoryRestBtn}
-                onPress={() => {
+                onPress={async () => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setIsOnline(false);
                   setShowRestAdvisory(false);
                   setShiftStartTime(Date.now());
+                  // Use the full offline path so the database, duty tracker and background task agree;
+                  // setIsOnline(false) alone left the chauffeur online for dispatch.
+                  if (isOnline) await handleToggleOnline();
                 }}
               >
                 <Text style={styles.advisoryRestBtnText}>GO OFFLINE & TAKE A BREAK</Text>

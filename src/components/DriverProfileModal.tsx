@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SignedImage } from './SignedImage';
 import {
   Modal,
   View,
@@ -102,9 +103,11 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
           text: "Erase My Data & Delete",
           style: "destructive",
           onPress: async () => {
+            // Scrub the driver row while the session can still write (unchanged order), then erase the
+            // account via the server. Previously every error was swallowed and the chauffeur was logged
+            // out as if the account had been erased; now failure is reported and they stay signed in.
             try {
               if (driver?.id) {
-                // DPDP Act: Scrub Personal Identifiable Information (PII)
                 await supabase.from('drivers').update({
                   full_name: 'DELETED_CHAUFFEUR',
                   phone: `DELETED_${Date.now()}`,
@@ -112,13 +115,25 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
                   status: 'inactive',
                 }).eq('id', driver.id);
               }
-              try {
-                await (supabase as any).rpc('delete_user_account');
-              } catch {}
-              await supabase.auth.signOut();
             } catch (err) {
-              console.warn('Account deletion error:', err);
+              console.warn('Driver row scrub notice:', err);
             }
+            let deletionError: string | null = null;
+            try {
+              const { error } = await (supabase as any).rpc('delete_user_account');
+              if (error) deletionError = error.message || 'Deletion service unavailable.';
+            } catch (e: any) {
+              deletionError = e?.message || 'Network error.';
+            }
+            if (deletionError) {
+              Alert.alert(
+                'Deletion Not Completed',
+                `We could not fully erase your account right now (${deletionError}). Please try again or contact Orange Taxi support.`
+              );
+              return;
+            }
+            Alert.alert('Account Erased', 'Your chauffeur account and personal data have been erased.');
+            // onLogout performs the sign-out and returns to the login screen.
             onLogout();
           }
         }
@@ -146,7 +161,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
             <View style={styles.avatarRow}>
               <View style={[styles.avatarCircle, { overflow: 'hidden' }]}>
                 {driver.photo_url ? (
-                  <Image source={{ uri: driver.photo_url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  <SignedImage uri={driver.photo_url} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                 ) : (
                   <Text style={styles.avatarInitial}>
                     {driver.full_name ? driver.full_name.charAt(0).toUpperCase() : 'D'}

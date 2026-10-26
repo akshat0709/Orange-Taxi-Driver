@@ -53,6 +53,8 @@ export function ScheduledRidesModal({
         .from('bookings')
         .select('*')
         .eq('status', 'scheduled')
+        // Open departures plus the ones this chauffeur already pre-accepted.
+        .or(`driver_id.is.null,driver_id.eq.${driverId}`)
         .order('scheduled_at', { ascending: true })
         .limit(25);
 
@@ -77,18 +79,14 @@ export function ScheduledRidesModal({
           text: 'Confirm Pre-Accept',
           style: 'default',
           onPress: async () => {
-            const { data: locked, error } = await supabase
-              .from('bookings')
-              .update({ driver_id: driverId })
-              .eq('id', ride.id)
-              .is('driver_id', null)
-              .select('*')
-              .maybeSingle();
+            // Claims go through the RPC; a direct update of driver_id is rejected by the database.
+            const { data: res, error } = await supabase.rpc('claim_scheduled_booking', { _booking_id: ride.id });
+            const locked = (res as any)?.success ? { ...ride, driver_id: driverId } : null;
 
             if (error || !locked) {
               Alert.alert(
                 'Already Claimed',
-                'Another chauffeur just claimed this scheduled departure. Please refresh the list.'
+                (res as any)?.error || 'Another chauffeur just claimed this scheduled departure. Please refresh the list.'
               );
               fetchScheduledRides();
               return;
@@ -101,6 +99,16 @@ export function ScheduledRidesModal({
         },
       ]
     );
+  }
+
+  async function handleRelease(ride: Booking) {
+    const { data: res, error } = await supabase.rpc('release_scheduled_booking', { _booking_id: ride.id });
+    if (error || !(res as any)?.success) {
+      Alert.alert('Could Not Release', (res as any)?.error || error?.message || 'Please try again.');
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    fetchScheduledRides();
   }
 
   return (
@@ -184,15 +192,25 @@ export function ScheduledRidesModal({
                   {/* Footer & Pre-Accept CTA */}
                   <View style={styles.cardFooter}>
                     <View style={styles.distanceBadge}>
-                      <Text style={styles.distanceBadgeText}>{item.distance_km} km · Zero Surge</Text>
+                      <Text style={styles.distanceBadgeText}>{item.distance_km} km</Text>
                     </View>
-                    <TouchableOpacity
-                      style={styles.claimButton}
-                      onPress={() => handlePreAccept(item)}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.claimButtonText}>PRE-ACCEPT RIDE</Text>
-                    </TouchableOpacity>
+                    {item.driver_id === driverId ? (
+                      <TouchableOpacity
+                        style={[styles.claimButton, { backgroundColor: '#334155' }]}
+                        onPress={() => handleRelease(item)}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.claimButtonText}>ASSIGNED · RELEASE</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.claimButton}
+                        onPress={() => handlePreAccept(item)}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.claimButtonText}>PRE-ACCEPT RIDE</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               );

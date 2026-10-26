@@ -21,6 +21,7 @@ import { Shield, Lock, Mail, Phone, User, Car, Zap, CheckCircle2, Sun, Moon } fr
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
+import { resolveDriverRowForUser } from '../lib/driverIdentity';
 import { Driver } from '../types';
 
 interface ChauffeurAuthModalProps {
@@ -97,35 +98,36 @@ const handleAadhaarChange = (text: string) => {
   const [chassisNumber, setChassisNumber] = useState('');
   const [message, setMessage] = useState('');
 
+  // KYC images go to the PRIVATE driver_kyc bucket under applications/ (the only prefix the
+  // storage policy accepts before sign-up) and are stored as storage:// references that the admin
+  // panel opens with signed URLs. The old code uploaded to the bucket root (now rejected) and saved
+  // getPublicUrl() links, which do not work on a private bucket. Same scheme as the web form.
+  const uploadKycImage = async (kind: 'photo' | 'dl'): Promise<string | null> => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, base64: true, quality: 0.7 });
+    if (result.canceled || !result.assets[0]?.base64) return null;
+    const random = Math.random().toString(36).slice(2, 10);
+    const path = `applications/${Date.now()}_${kind}_${random}.jpg`;
+    const { data, error } = await supabase.storage.from('driver_kyc').upload(path, decode(result.assets[0].base64), { contentType: 'image/jpeg' });
+    if (error || !data?.path) {
+      Alert.alert('Upload Error', error?.message || 'Could not upload the image. Please try again.');
+      return null;
+    }
+    return `storage://driver_kyc/${data.path}`;
+  };
+
   const handleUploadDriverPhoto = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, base64: true });
-    if (!result.canceled && result.assets[0].base64) {
-      const base64 = result.assets[0].base64;
-      const fileName = `photo_${Date.now()}.jpg`;
-      const { data, error } = await supabase.storage.from('driver_kyc').upload(fileName, decode(base64), { contentType: 'image/jpeg' });
-      if (error) {
-        Alert.alert('Upload Error', error.message);
-      } else if (data) {
-        const { data: publicData } = supabase.storage.from('driver_kyc').getPublicUrl(data.path);
-        setDriverPhotoUrl(publicData.publicUrl);
-        Alert.alert('Success', 'Driver photo uploaded successfully.');
-      }
+    const ref = await uploadKycImage('photo');
+    if (ref) {
+      setDriverPhotoUrl(ref);
+      Alert.alert('Success', 'Driver photo uploaded successfully.');
     }
   };
 
   const handleUploadDocuments = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, base64: true });
-    if (!result.canceled && result.assets[0].base64) {
-      const base64 = result.assets[0].base64;
-      const fileName = `doc_${Date.now()}.jpg`;
-      const { data, error } = await supabase.storage.from('driver_kyc').upload(fileName, decode(base64), { contentType: 'image/jpeg' });
-      if (error) {
-        Alert.alert('Upload Error', error.message);
-      } else if (data) {
-        const { data: publicData } = supabase.storage.from('driver_kyc').getPublicUrl(data.path);
-        setDocumentsUrl(publicData.publicUrl);
-        Alert.alert('Success', 'Documents uploaded successfully.');
-      }
+    const ref = await uploadKycImage('dl');
+    if (ref) {
+      setDocumentsUrl(ref);
+      Alert.alert('Success', 'Documents uploaded successfully.');
     }
   };
 
@@ -329,56 +331,18 @@ const handleAadhaarChange = (text: string) => {
       if (data?.user) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-        let driverRowFinal = null;
-
-        const { data: driverRow } = await supabase
-          .from('drivers')
-          .select('*')
-          .eq('user_id', data.user.id)
-          .maybeSingle();
-
-        driverRowFinal = driverRow;
+        // Bind only to a driver row linked to this account (or a legacy row matched on the
+        // auth-verified phone). The old fallback trusted the phone typed in at sign-up.
+        const driverRowFinal: any = await resolveDriverRowForUser(supabase, data.user);
 
         if (!driverRowFinal) {
-          const userEmail = data.user.email || '';
-          const userPhone = data.user.phone || data.user.user_metadata?.phone || '';
-
-          if (userEmail) {
-            const { data: profileRow } = await supabase
-              .from('profiles')
-              .select('id')
-              .eq('email', userEmail)
-              .maybeSingle();
-            if (profileRow) {
-              const { data: byProfileId } = await supabase
-                .from('drivers')
-                .select('*')
-                .eq('user_id', profileRow.id)
-                .maybeSingle();
-              if (byProfileId) driverRowFinal = byProfileId;
-            }
-          }
-
-          if (!driverRowFinal && userPhone) {
-            const digits = userPhone.replace(/\D/g, '');
-            const { data: allDrivers } = await supabase
-              .from('drivers')
-              .select('*')
-              .limit(200);
-            if (allDrivers) {
-              driverRowFinal = allDrivers.find((d: any) =>
-                d.phone && d.phone.replace(/\D/g, '').endsWith(digits.slice(-10))
-              ) || null;
-            }
-          }
-
-          if (driverRowFinal && !driverRowFinal.user_id) {
-            await supabase
-              .from('drivers')
-              .update({ user_id: data.user.id })
-              .eq('id', driverRowFinal.id);
-            driverRowFinal.user_id = data.user.id;
-          }
+          // No approved chauffeur profile: the app shows the "Pending Approval" screen via its
+          // auth listener. Do not fabricate a profile and put the account online.
+          Alert.alert(
+            'Application Under Review',
+            'Your chauffeur account has not been approved yet. You will be able to go online once Orange Taxi Admin approves it.'
+          );
+          return;
         }
 
         const driverProfile: Driver = {
@@ -434,16 +398,13 @@ const handleAadhaarChange = (text: string) => {
         email: email.trim(),
         password: password.trim(),
         options: {
+          // Only non-sensitive profile fields: user_metadata is embedded in every session JWT and
+          // cached on the device. Aadhaar, licence number and KYC files go to driver_applications only.
           data: {
             full_name: fullName.trim(),
             phone: phone.trim(),
             role: 'driver_pending',
             city,
-            cdl_number: cdlNumber.trim(),
-            aadhaar_number: aadhaarNumber.trim(),
-            years_driving: yearsDriving.trim(),
-            driver_photo_url: driverPhotoUrl,
-            documents_url: documentsUrl,
           },
         },
       });
