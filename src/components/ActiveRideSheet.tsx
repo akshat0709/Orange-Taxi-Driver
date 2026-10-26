@@ -509,18 +509,26 @@ export function ActiveRideSheet({
 
           {/* Fare Summary Box */}
           {(() => {
+            // How the fare was settled. "Cash received" used to show as "Payment was made online"
+            // because payment_made = 'yes' was checked before the payment method.
             const rawPaymentMade = String(booking.payment_made ?? '').trim().toLowerCase();
             const isExplicitlyNo = rawPaymentMade === 'no' || booking.payment_made === false;
             const isExplicitlyYes = rawPaymentMade === 'yes' || booking.payment_made === true;
-            const isPaidOnline = paidByQr || booking.payment_method === 'upi_qr'
-              ? true
-              : isExplicitlyNo
+            const isMarkedPaid = isExplicitlyNo
               ? false
-              : isExplicitlyYes
-              ? true
-              : booking.payment_method === 'cash' || booking.payment_method === 'driver_upi'
-              ? false
-              : booking.payment_status === 'paid' || booking.payment_status === 'paid_online';
+              : isExplicitlyYes || booking.payment_status === 'paid' || booking.payment_status === 'paid_online';
+            const paidQr = paidByQr || booking.payment_method === 'upi_qr';
+            const isDirect = booking.payment_method === 'cash' || booking.payment_method === 'driver_upi';
+            const cashCollected = !paidQr && (cashConfirmed || (isDirect && isMarkedPaid));
+            const isPaidOnline = paidQr || (!isDirect && isMarkedPaid);
+            const isSettled = isPaidOnline || cashCollected;
+            const statusLabel = paidQr
+              ? 'Paid by UPI QR'
+              : cashCollected
+              ? 'Cash received'
+              : isPaidOnline
+              ? 'Payment was made online'
+              : 'Payment to be collected';
 
             return (
               <>
@@ -531,16 +539,12 @@ export function ActiveRideSheet({
                   </View>
                   <View style={styles.fareRow}>
                     <Text style={styles.fareLabel}>Payment Status</Text>
-                    <Text style={[styles.fareValue, { color: isPaidOnline ? '#10B981' : '#F97316' }]}>
-                      {paidByQr || booking.payment_method === 'upi_qr'
-                        ? 'Paid by UPI QR'
-                        : isPaidOnline
-                        ? 'Payment was made online'
-                        : 'Payment to be collected'}
+                    <Text style={[styles.fareValue, { color: isSettled ? '#10B981' : '#F97316' }]}>
+                      {statusLabel}
                     </Text>
                   </View>
 
-                  {!isPaidOnline ? (
+                  {!isSettled ? (
                     <View style={styles.cashNoticeBox}>
                       <Banknote size={18} color="#F97316" />
                       <Text style={styles.cashNoticeText}>
@@ -551,13 +555,15 @@ export function ActiveRideSheet({
                     <View style={styles.digitalNoticeBox}>
                       <CheckCircle size={18} color="#10B981" />
                       <Text style={styles.digitalNoticeText}>
-                        Payment was made online. Do NOT collect cash.
+                        {cashCollected
+                          ? `Cash of ₹${formatRupees(booking.estimated_fare)} recorded. Hand it in from Earnings.`
+                          : 'Payment was made online. Do NOT collect cash.'}
                       </Text>
                     </View>
                   )}
                 </View>
 
-                {!isPaidOnline && !cashConfirmed ? (
+                {!isSettled ? (
                   <View style={{ gap: 10 }}>
                     <Text style={{ textAlign: 'center', fontSize: 12, fontWeight: 'bold', marginBottom: 5, color: isDark ? '#9CA3AF' : '#6B7280' }}>
                       How did the passenger pay?
