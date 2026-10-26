@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { Shield, Lock, Mail, Phone, User, Car, Zap, CheckCircle2, Sun, Moon } from 'lucide-react-native';
+import { Shield, Lock, Mail, Phone, User, Car, Zap, CheckCircle2, Sun, Moon, Eye, EyeOff } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
@@ -62,6 +62,8 @@ export function ChauffeurAuthModal({
   const [mode, setMode] = useState<'signin' | 'signup' | 'verify_otp'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otpDigits, setOtpDigits] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -1011,10 +1013,21 @@ const handleAadhaarChange = (text: string) => {
                   style={[styles.textInput, isLight && styles.textInputLight]}
                   placeholder="••••••••••••"
                   placeholderTextColor={placeholderColor}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
                   value={password}
                   onChangeText={setPassword}
                 />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((v) => !v)}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                  style={{ paddingLeft: 10 }}
+                >
+                  {showPassword ? <EyeOff size={18} color={iconColor} /> : <Eye size={18} color={iconColor} />}
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -1027,10 +1040,21 @@ const handleAadhaarChange = (text: string) => {
                     style={[styles.textInput, isLight && styles.textInputLight]}
                     placeholder="Re-enter your password"
                     placeholderTextColor={placeholderColor}
-                    secureTextEntry
+                    secureTextEntry={!showConfirmPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                   />
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword((v) => !v)}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    style={{ paddingLeft: 10 }}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} color={iconColor} /> : <Eye size={18} color={iconColor} />}
+                  </TouchableOpacity>
                 </View>
               </View>
             )}
