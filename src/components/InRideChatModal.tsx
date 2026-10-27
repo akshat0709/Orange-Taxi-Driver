@@ -112,6 +112,18 @@ function formatDistance(meters: number): string {
 /**
  * Parses a chat message text to identify Google/Apple Maps links or coordinates.
  */
+// Only open links to real map sites from chat messages; anything else (a look-alike or
+// phishing link pasted into the chat) falls back to Google Maps.
+const MAP_HOSTS = /^(?:(?:maps|www)\.)?google\.(?:com|co\.in)$|^(?:maps\.app\.)?goo\.gl$|^maps\.apple\.com$/i;
+function safeMapsUrl(candidate?: string): string {
+  if (!candidate) return 'https://maps.google.com';
+  try {
+    const u = new URL(candidate);
+    if (u.protocol === 'https:' && MAP_HOSTS.test(u.hostname)) return u.toString();
+  } catch {}
+  return 'https://maps.google.com';
+}
+
 export function parseLocationMessage(text: string): ParsedLocationInfo | null {
   if (!text) return null;
 
@@ -163,11 +175,11 @@ export function parseLocationMessage(text: string): ParsedLocationInfo | null {
   const gUrl =
     latitude !== undefined && longitude !== undefined
       ? `https://maps.google.com/?q=${latitude},${longitude}`
-      : text.match(/https?:\/\/[^\s]+/)?.[0] || 'https://maps.google.com';
+      : safeMapsUrl(text.match(/https?:\/\/[^\s]+/)?.[0]);
 
   const aUrl =
     latitude !== undefined && longitude !== undefined
-      ? `http://maps.apple.com/?q=${latitude},${longitude}&ll=${latitude},${longitude}`
+      ? `https://maps.apple.com/?q=${latitude},${longitude}&ll=${latitude},${longitude}`
       : undefined;
 
   return {
