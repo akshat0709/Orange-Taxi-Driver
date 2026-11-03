@@ -24,7 +24,7 @@
       "config": {}
     },
     "android": {
-      "package": "com.orangetaxi.driver",
+      "package": "com.orangetaxi.chauffeur",
       "versionCode": 1,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
