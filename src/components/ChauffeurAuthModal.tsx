@@ -24,6 +24,7 @@ import { supabase } from '../lib/supabase';
 import { accountStatus } from '../lib/accountStatus';
 import { resolveDriverRowForUser } from '../lib/driverIdentity';
 import { Driver } from '../types';
+import { aadhaarDigits, formatAadhaar, isValidAadhaar, maskAadhaar } from '../lib/aadhaar';
 
 interface ChauffeurAuthModalProps {
   visible: boolean;
@@ -73,19 +74,10 @@ export function ChauffeurAuthModal({
   const [cdlNumber, setCdlNumber] = useState('');
   const [aadhaarNumber, setAadhaarNumber] = useState('');
 
+// Holds the digits as typed. The old version replaced them with "XXXX" while typing, so the
+// next keystroke wiped the digits already entered. Only the masked form is saved (see aadhaar.ts).
 const handleAadhaarChange = (text: string) => {
-    // Only allow numbers
-    const cleaned = text.replace(/\D/g, '');
-    let masked = cleaned;
-    
-    // Mask first 8 digits as they are typed
-    if (cleaned.length > 8) {
-      masked = 'XXXX-XXXX-' + cleaned.substring(8, 12);
-    } else if (cleaned.length > 4) {
-      masked = 'XXXX-' + cleaned.substring(4, 8);
-    }
-    
-    setAadhaarNumber(masked);
+    setAadhaarNumber(aadhaarDigits(text));
 };
 
   const [yearsDriving, setYearsDriving] = useState('');
@@ -404,6 +396,11 @@ const handleAadhaarChange = (text: string) => {
       return;
     }
 
+    if (!isValidAadhaar(aadhaarNumber)) {
+      Alert.alert('Check Aadhaar Number', 'Please enter your 12-digit Aadhaar number exactly as printed on the card.');
+      return;
+    }
+
     if (password.length < 8) {
       Alert.alert('Weak Password', 'Password must be at least 8 characters long.');
       return;
@@ -453,7 +450,7 @@ const handleAadhaarChange = (text: string) => {
             phone: phone.trim(),
             city: city || 'Unknown',
             licence_number: cdlNumber.trim(),
-            aadhaar_number: aadhaarNumber.trim(),
+            aadhaar_number: maskAadhaar(aadhaarNumber),
             experience_years: parseInt(yearsDriving) || 0,
             photo_url: driverPhotoUrl || '',
             dl_url: documentsUrl || '',
@@ -478,7 +475,7 @@ const handleAadhaarChange = (text: string) => {
               phone: phone.trim(),
               city: city || 'Unknown',
               licence_number: cdlNumber.trim(),
-              aadhaar_number: aadhaarNumber.trim(),
+              aadhaar_number: maskAadhaar(aadhaarNumber),
               experience_years: parseInt(yearsDriving) || 0,
               dl_url: documentsUrl || '',
               owns_vehicle: ownsVehicle,
@@ -805,9 +802,11 @@ const handleAadhaarChange = (text: string) => {
                       placeholder="e.g. 1234 5678 9012"
                       placeholderTextColor={placeholderColor}
                       keyboardType="numeric"
-                      value={aadhaarNumber}
+                      value={formatAadhaar(aadhaarNumber)}
                       onChangeText={handleAadhaarChange}
                       maxLength={14}
+                      autoComplete="off"
+                      importantForAutofill="no"
                     />
                   </View>
                 </View>
