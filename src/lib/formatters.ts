@@ -20,3 +20,9 @@ export function round2(amount: number | string | null | undefined): number {
   }
   return Math.round((Number(amount) + Number.EPSILON) * 100) / 100;
 }
+
+/** "★ 4.8" for a rated chauffeur, "★ New" before the first rating (was a made-up 5.0). */
+export function ratingLabel(rating: number | string | null | undefined): string {
+  const n = Number(rating);
+  return n > 0 ? `★ ${n.toFixed(1)}` : '★ New';
+}

@@ -68,7 +68,7 @@ export interface DriverStats {
   todayHours: number;
   cashCollected: number;
   rating: number;
-  acceptanceRate: number;
+  acceptanceRate: number | null;
   totalEarnings?: number;
   totalTrips?: number;
 }

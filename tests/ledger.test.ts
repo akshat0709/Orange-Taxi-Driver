@@ -22,3 +22,17 @@ test('commission ledger matches the website formula', () => {
   assert.equal(l.driverEarnings, 2500 - 150 - 225);
   assert.equal(paymentLabel('upi_qr'), '🔳 UPI QR');
 });
+
+test("home screen earnings use the admin's commission, not a fixed 85%", async () => {
+  const { partnerLedger } = await import('../src/lib/ledger.ts');
+  const rides = [{ final_fare: 1000, payment_method: 'cash' }, { final_fare: 500, payment_method: 'upi_qr' }];
+  assert.equal(partnerLedger(rides, [], 10).driverEarnings, 1350);
+  assert.equal(partnerLedger(rides, [], 0).driverEarnings, 1500);
+});
+
+test('rating label shows New until the first rating', async () => {
+  const { ratingLabel } = await import('../src/lib/formatters.ts');
+  assert.equal(ratingLabel(0), '★ New');
+  assert.equal(ratingLabel(null), '★ New');
+  assert.equal(ratingLabel('4.76'), '★ 4.8');
+});

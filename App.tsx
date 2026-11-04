@@ -43,7 +43,7 @@ import { DriverProfileModal } from './src/components/DriverProfileModal';
 import { InRideChatModal } from './src/components/InRideChatModal';
 import { ChauffeurAuthModal } from './src/components/ChauffeurAuthModal';
 import { CoolCarSplashScreen } from './src/components/CoolCarSplashScreen';
-import { formatRupees, round2 } from './src/lib/formatters';
+import { formatRupees, ratingLabel, round2 } from './src/lib/formatters';
 import { soundService } from './src/lib/soundService';
 import { resolveBookingTargetCoords } from './src/lib/locationResolver';
 import { detectCityFromCoords } from './src/lib/city-detector';
@@ -53,6 +53,7 @@ import { resolveDriverRowForUser } from './src/lib/driverIdentity';
 import { isMissingRpcError, isNetworkError, REPLAYABLE_FROM_STATUSES } from './src/lib/supabaseErrors';
 
 import * as TaskManager from 'expo-task-manager';
+import { partnerLedger } from './src/lib/ledger';
 
 
 
@@ -105,7 +106,7 @@ const INITIAL_STATS: DriverStats = {
   todayHours: 0,
   cashCollected: 0,
   rating: 0,
-  acceptanceRate: 0,
+  acceptanceRate: null,
 };
 
 
@@ -410,6 +411,16 @@ function MainChauffeurApp() {
 
       const completed = allBookings || [];
 
+      // Commission set by the admin (Admin → Pricing), the same figure the Earnings screen uses.
+      // This used to assume a fixed 85% share for every driver.
+      const { data: ps } = await supabase
+        .from('pricing_settings')
+        .select('partner_commission_percent')
+        .eq('id', 1)
+        .maybeSingle();
+      const commissionPct = Number((ps as any)?.partner_commission_percent);
+      const pct = Number.isFinite(commissionPct) ? commissionPct : 0;
+
       // Calculate start of today in local date
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
@@ -423,12 +434,7 @@ function MainChauffeurApp() {
       });
 
       const todayTrips = todayBookings.length;
-      const todayRawTotal = todayBookings.reduce(
-        (sum, b) => sum + (Number(b.final_fare) || Number(b.estimated_fare) || 0),
-        0
-      );
-      // Net chauffeur earnings: 85% share
-      const todayNetEarnings = round2(todayRawTotal * 0.85);
+      const todayNetEarnings = round2(partnerLedger(todayBookings, [], pct).driverEarnings);
 
       const cashTotal = round2(
         todayBookings
@@ -444,11 +450,7 @@ function MainChauffeurApp() {
       );
 
       // All-time net earnings if driver has completed rides overall
-      const allRawTotal = completed.reduce(
-        (sum, b) => sum + (Number(b.final_fare) || Number(b.estimated_fare) || 0),
-        0
-      );
-      const allNetEarnings = round2(allRawTotal * 0.85);
+      const allNetEarnings = round2(partnerLedger(completed, [], pct).driverEarnings);
 
       // Calculate today's online duty hours accurately from duty tracker and verified rides
       const dutySec = await getTodayOnlineDutySeconds(isOnline);
@@ -473,8 +475,8 @@ function MainChauffeurApp() {
         todayTrips: todayTrips,         // Strictly trips completed today!
         todayHours: dutyHours,
         cashCollected: cashTotal,
-        rating: activeDriver?.rating || 5.0,
-        acceptanceRate: 98,
+        rating: Number(activeDriver?.rating) || 0,
+        acceptanceRate: null, // declined requests aren't recorded, so there is no real rate yet
         totalEarnings: allNetEarnings,  // Lifetime net earnings
         totalTrips: totalTripsCount,    // Lifetime total trips
       };
@@ -1443,7 +1445,7 @@ function MainChauffeurApp() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#F97316" />
-        <Text style={styles.loadingText}>Connecting to Supabase Fleet Node...</Text>
+        <Text style={styles.loadingText}>Loading your account...</Text>
       </View>
     );
   }
@@ -1622,9 +1624,9 @@ function MainChauffeurApp() {
                 <Radio size={20} color="#F97316" />
               </View>
               <View style={styles.idleStatusTextCol}>
-                <Text style={[styles.idleStatusTitle, theme === 'light' && styles.textDark]}>Searching for Premium Dispatches</Text>
+                <Text style={[styles.idleStatusTitle, theme === 'light' && styles.textDark]}>Waiting for ride requests</Text>
                 <Text style={styles.idleStatusSubtitle}>
-                  Connected to Supabase • Realtime Fleet Dispatch Active
+                  You're online · new requests appear here automatically
                 </Text>
               </View>
             </View>
@@ -1647,7 +1649,7 @@ function MainChauffeurApp() {
               </View>
               <View style={styles.quickMetricDivider} />
               <View style={styles.quickMetricCol}>
-                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>★ {(driver?.rating || stats.rating || 5.0).toFixed(1)}</Text>
+                <Text style={[styles.quickMetricVal, theme === 'light' && styles.textDark]}>{ratingLabel(driver?.rating || stats.rating)}</Text>
                 <Text style={styles.quickMetricLbl}>Rating</Text>
               </View>
             </View>

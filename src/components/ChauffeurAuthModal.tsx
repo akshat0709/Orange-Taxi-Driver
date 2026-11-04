@@ -575,7 +575,7 @@ const handleAadhaarChange = (text: string) => {
             <Text style={[styles.brandSubtitle, isLight && styles.brandSubtitleLight]}>
               {mode === 'verify_otp'
                 ? `Enter the 6-digit verification code sent to ${email || 'your email'}`
-                : 'Connected to Supabase Cloud Database • Live Fleet Node'}
+                : 'Sign in or apply to drive with Orange Taxi'}
             </Text>
           </View>
 

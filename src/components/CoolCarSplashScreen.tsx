@@ -217,7 +217,7 @@ export const CoolCarSplashScreen: React.FC<CoolCarSplashScreenProps> = ({
         <Text style={styles.brandTagline}>
           {isRider
             ? 'Mahindra BE.6 Signature Luxury EV'
-            : 'Zero Commission · Daily Payouts · Elite Fleet'}
+            : '100% Electric · Premium Fleet'}
         </Text>
       </Animated.View>
 

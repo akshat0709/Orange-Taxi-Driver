@@ -70,7 +70,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
       await AsyncStorage.setItem('@orange_driver_payout', JSON.stringify(payoutData));
       Alert.alert(
         'Settlement Saved',
-        'Your bank settlement details have been updated. Automated daily payouts will be credited to this account.'
+        'Saved on this phone. Share them with Orange Taxi support so settlements can be paid to this account.'
       );
     } catch {
       Alert.alert('Error', 'Could not save payout details.');
@@ -150,9 +150,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
             <Text style={[styles.closeBtnText, isLight && styles.textDark]}>✕</Text>
           </TouchableOpacity>
           <Text style={[styles.headerTitle, isLight && styles.textDark]}>Chauffeur Profile</Text>
-          <View style={styles.headerBadge}>
-            <Text style={styles.headerBadgeText}>PRO</Text>
-          </View>
+          <View style={{ width: 44 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -178,10 +176,9 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
                 <Text style={styles.driverPhone}>{driver.phone || 'Phone not added'}</Text>
                 <View style={styles.ratingBadgeRow}>
                   <Text style={styles.ratingStar}>★</Text>
-                  <Text style={[styles.ratingNumber, isLight && styles.textDark]}>{(driver.rating || 5.0).toFixed(2)}</Text>
+                  <Text style={[styles.ratingNumber, isLight && styles.textDark]}>{driver.rating ? Number(driver.rating).toFixed(2) : 'New'}</Text>
                   <Text style={styles.tripCountBullet}>•</Text>
                   <Text style={styles.tripCountText}>{driver.total_rides || driver.total_trips || stats?.totalTrips || 0} total trips</Text>
-                  <Text style={styles.tierText}>• Gold Chauffeur</Text>
                 </View>
               </View>
             </View>
@@ -325,7 +322,7 @@ export const DriverProfileModal: React.FC<DriverProfileModalProps> = ({
           {driver?.driver_type === 'partner' ? (
             <View style={[styles.sectionCard, isLight && styles.cardLight]}>
               <Text style={[styles.sectionTitle, isLight && styles.textDark]}>🏦 Payout & Daily Settlement</Text>
-              <Text style={styles.payoutSubtitle}>Configure your UPI VPA or Bank Account for automated daily trip payouts.</Text>
+              <Text style={styles.payoutSubtitle}>Saved on this phone for your reference. Share these details with Orange Taxi support to receive settlements.</Text>
 
               <View style={{ marginTop: 12 }}>
                 <Text style={[styles.payoutLabel, isLight && styles.textDark]}>UPI ID (GPay / PhonePe / Paytm)</Text>
