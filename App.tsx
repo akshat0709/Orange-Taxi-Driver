@@ -54,6 +54,7 @@ import { isMissingRpcError, isNetworkError, REPLAYABLE_FROM_STATUSES } from './s
 
 import * as TaskManager from 'expo-task-manager';
 import { partnerLedger } from './src/lib/ledger';
+import { hexCell } from './src/lib/hexGrid'; // H3 hexagon for ride matching
 
 
 
@@ -79,6 +80,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
             await supabase.from('drivers').update({
               current_lat: loc.coords.latitude,
               current_lng: loc.coords.longitude,
+              h3_r7: hexCell(loc.coords.latitude, loc.coords.longitude),
               city: detectedCity,
               location_updated_at: new Date().toISOString(),
             }).eq('id', driver.id);
@@ -749,6 +751,7 @@ function MainChauffeurApp() {
                     await supabase.from('drivers').update({
                       current_lat: loc.coords.latitude,
                       current_lng: loc.coords.longitude,
+                      h3_r7: hexCell(loc.coords.latitude, loc.coords.longitude),
                       city: detectedCity,
                       location_updated_at: new Date().toISOString(),
                     }).eq('id', d.id);
@@ -844,6 +847,7 @@ function MainChauffeurApp() {
           .update({
             current_lat: driverLocation.latitude,
             current_lng: driverLocation.longitude,
+            h3_r7: hexCell(driverLocation.latitude, driverLocation.longitude),
             city: detectedCity,
             is_online: true,
             location_updated_at: new Date().toISOString(),
