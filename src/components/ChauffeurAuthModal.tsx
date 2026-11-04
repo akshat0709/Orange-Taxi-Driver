@@ -25,6 +25,7 @@ import { accountStatus } from '../lib/accountStatus';
 import { resolveDriverRowForUser } from '../lib/driverIdentity';
 import { Driver } from '../types';
 import { aadhaarDigits, formatAadhaar, isValidAadhaar, maskAadhaar } from '../lib/aadhaar';
+import { savePendingApplication, submitPendingApplication } from '../lib/pendingApplication';
 
 interface ChauffeurAuthModalProps {
   visible: boolean;
@@ -227,12 +228,28 @@ const handleAadhaarChange = (text: string) => {
       await AsyncStorage.removeItem('@orange_driver_otp_attempts');
       await AsyncStorage.removeItem('@orange_driver_otp_lockout');
 
+      // Now that the email is verified (and the driver is signed in), send the application.
+      const result = await submitPendingApplication(AsyncStorage, supabase, email);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        'Email Verified!',
-        'Your chauffeur account is verified. You can now sign in to access your Chauffeur Console.',
-        [{ text: 'Continue to Sign In', onPress: () => setMode('signin') }]
-      );
+      if (result === 'sent') {
+        Alert.alert(
+          'Application Submitted',
+          'Your email is verified and your application has been sent to Orange Taxi for review. Sign in to check its status.',
+          [{ text: 'Continue to Sign In', onPress: () => setMode('signin') }]
+        );
+      } else if (result === 'none') {
+        Alert.alert(
+          'Email Verified!',
+          'Your chauffeur account is verified. You can now sign in to access your Chauffeur Console.',
+          [{ text: 'Continue to Sign In', onPress: () => setMode('signin') }]
+        );
+      } else {
+        Alert.alert(
+          'Application Not Sent',
+          `Your email is verified, but the application could not be sent (${result}). Sign in and it will be sent again.`,
+          [{ text: 'Continue to Sign In', onPress: () => setMode('signin') }]
+        );
+      }
     } catch (err: any) {
       Alert.alert('Verification Error', err.message || 'Failed to verify code.');
     } finally {
@@ -346,6 +363,12 @@ const handleAadhaarChange = (text: string) => {
       if (data?.user) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+        // Verified through the email link instead of the code: the application is still waiting.
+        const pending = await submitPendingApplication(AsyncStorage, supabase, email);
+        if (pending === 'sent') {
+          Alert.alert('Application Submitted', 'Your application has been sent to Orange Taxi for review.');
+        }
+
         // Bind only to a driver row linked to this account (or a legacy row matched on the
         // auth-verified phone). The old fallback trusted the phone typed in at sign-up.
         const driverRowFinal: any = await resolveDriverRowForUser(supabase, data.user);
@@ -432,65 +455,56 @@ const handleAadhaarChange = (text: string) => {
       if (error) throw error;
 
       if (data?.user) {
-        // Attempt to insert into driver_applications
-        try {
-          const metaData = {
-            photo_url: driverPhotoUrl || '',
-            driver_type: ownsVehicle ? "partner" : "company",
-            vehicle_model: ownsVehicle ? vehicleModel.trim() : null,
-            vehicle_number: ownsVehicle ? vehicleNumber.trim() : null,
-            chassis_number: ownsVehicle ? chassisNumber.trim() : null,
-            vehicle_year: ownsVehicle ? parseInt(vehicleYear) || null : null,
-          };
-          const metaJson = JSON.stringify(metaData);
+        // Supabase answers a sign-up for an email that already has an account with a user that has
+        // no identities (and sends no code). Send them to sign in instead.
+        if (Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          setMode('signin');
+          Alert.alert('Account Already Exists', 'An account with this email already exists. Please sign in instead.');
+          return;
+        }
 
-          const fullPayload = {
-            email: email.trim(),
-            full_name: fullName.trim(),
-            phone: phone.trim(),
-            city: city || 'Unknown',
-            licence_number: cdlNumber.trim(),
-            aadhaar_number: maskAadhaar(aadhaarNumber),
-            experience_years: parseInt(yearsDriving) || 0,
-            photo_url: driverPhotoUrl || '',
-            dl_url: documentsUrl || '',
-            owns_vehicle: ownsVehicle,
-            vehicle_model: ownsVehicle ? vehicleModel.trim() : null,
-            vehicle_year: ownsVehicle ? parseInt(vehicleYear) || null : null,
-            vehicle_number: ownsVehicle ? vehicleNumber.trim() : null,
-            chassis_number: ownsVehicle ? chassisNumber.trim() : null,
-            status: 'new',
-            message: message.trim(),
-            admin_notes: metaJson
-          };
+        const metaJson = JSON.stringify({
+          photo_url: driverPhotoUrl || '',
+          driver_type: ownsVehicle ? 'partner' : 'company',
+          vehicle_model: ownsVehicle ? vehicleModel.trim() : null,
+          vehicle_number: ownsVehicle ? vehicleNumber.trim() : null,
+          chassis_number: ownsVehicle ? chassisNumber.trim() : null,
+          vehicle_year: ownsVehicle ? parseInt(vehicleYear) || null : null,
+        });
+        const applicationRow = {
+          email: email.trim(),
+          full_name: fullName.trim(),
+          phone: phone.trim(),
+          city: city || 'Unknown',
+          licence_number: cdlNumber.trim(),
+          aadhaar_number: maskAadhaar(aadhaarNumber),
+          experience_years: parseInt(yearsDriving) || 0,
+          photo_url: driverPhotoUrl || '',
+          dl_url: documentsUrl || '',
+          owns_vehicle: ownsVehicle,
+          vehicle_model: ownsVehicle ? vehicleModel.trim() : null,
+          vehicle_year: ownsVehicle ? parseInt(vehicleYear) || null : null,
+          vehicle_number: ownsVehicle ? vehicleNumber.trim() : null,
+          chassis_number: ownsVehicle ? chassisNumber.trim() : null,
+          status: 'new',
+          message: message.trim(),
+          admin_notes: metaJson,
+        };
 
-          let { error: insertErr } = await supabase.from('driver_applications').insert(fullPayload);
+        // The application is sent only after the email is verified (see pendingApplication.ts).
+        await savePendingApplication(AsyncStorage, email, applicationRow);
 
-          if (insertErr) {
-            // Fallback for strict schemas that don't have vehicle/photo columns yet
-            console.warn("Retrying insert with base schema...", insertErr);
-            const basePayload = {
-              email: email.trim(),
-              full_name: fullName.trim(),
-              phone: phone.trim(),
-              city: city || 'Unknown',
-              licence_number: cdlNumber.trim(),
-              aadhaar_number: maskAadhaar(aadhaarNumber),
-              experience_years: parseInt(yearsDriving) || 0,
-              dl_url: documentsUrl || '',
-              owns_vehicle: ownsVehicle,
-              status: 'new',
-              message: message.trim(),
-              admin_notes: metaJson
-            };
-            const retry = await supabase.from('driver_applications').insert(basePayload);
-            if (retry.error) {
-              Alert.alert('Database Error', retry.error.message || JSON.stringify(retry.error));
-              return;
-            }
+        if (data.session) {
+          // Email confirmation is switched off in Supabase: the account is already verified.
+          const result = await submitPendingApplication(AsyncStorage, supabase, email);
+          if (result === 'sent') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            Alert.alert('Application Submitted', 'Your application has been sent to Orange Taxi for review.');
+          } else {
+            Alert.alert('Application Not Sent', `${result} Please sign in to try again.`);
           }
-        } catch (e) {
-          console.warn('Could not insert driver application', e);
+          setMode('signin');
+          return;
         }
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -498,8 +512,8 @@ const handleAadhaarChange = (text: string) => {
         setOtpDigits('');
         setResendCooldown(30);
         Alert.alert(
-          'Application Submitted & Verify Email',
-          `Your application has been received! A 6-digit verification code has been sent to ${email.trim()}. Please enter it to verify your account, or tap the link in your email.`
+          'Verify Your Email',
+          `We sent a 6-digit code to ${email.trim()}. Enter it to verify your email; your application is submitted once your email is verified.`
         );
       }
     } catch (err: any) {
