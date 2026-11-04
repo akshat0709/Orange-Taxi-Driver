@@ -45,6 +45,11 @@ export interface Booking {
   payment_method: 'cash' | 'upi' | 'wallet' | string;
   payment_status: string;
   payment_made?: string | boolean | null;
+  /** Ride offer this chauffeur is answering (my_ride_offers): when it runs out, the road ETA, and
+   * whether the ride was opened to everyone nearby. Not database columns. */
+  offer_expires_at?: string | null;
+  offer_eta_seconds?: number | null;
+  offer_is_open?: boolean;
   ride_otp?: string | null;
   scheduled_at?: string | null;
   accepted_at?: string | null;

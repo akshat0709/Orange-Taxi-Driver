@@ -13,11 +13,14 @@ import { MapPin, Navigation, Banknote, CreditCard, Wallet, Car, Clock, ShieldChe
 import { Booking } from '../types';
 import { formatRupees } from '../lib/formatters';
 import { soundService } from '../lib/soundService';
+import { OFFER_SECONDS, pickupEtaLabel, secondsLeft } from '../lib/rideOffers';
 
 interface IncomingRideModalProps {
   booking: Booking | null;
   onAccept: (booking: Booking) => void;
   onDecline: (booking: Booking) => void;
+  /** Time ran out without an answer (defaults to onDecline). */
+  onExpire?: (booking: Booking) => void;
   theme?: 'light' | 'dark';
 }
 
@@ -27,10 +30,14 @@ export function IncomingRideModal({
   booking,
   onAccept,
   onDecline,
+  onExpire,
   theme = 'dark',
 }: IncomingRideModalProps) {
   const isDark = theme === 'dark';
   const [secondsRemaining, setSecondsRemaining] = useState(RING_DURATION);
+  // Personal ride offers run on the server's clock (20 s); other requests ring for 30 s.
+  const total = booking?.offer_expires_at ? OFFER_SECONDS : RING_DURATION;
+  const etaLabel = pickupEtaLabel(booking?.offer_eta_seconds);
 
   useEffect(() => {
     if (!booking) {
@@ -39,7 +46,8 @@ export function IncomingRideModal({
       return;
     }
 
-    setSecondsRemaining(RING_DURATION);
+    const start = booking.offer_expires_at ? secondsLeft(booking.offer_expires_at) : RING_DURATION;
+    setSecondsRemaining(Math.max(1, start));
 
     // Initial alert vibration and continuous audible sound alert
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -50,7 +58,7 @@ export function IncomingRideModal({
         if (prev <= 1) {
           clearInterval(timer);
           soundService.stopDispatchAlert();
-          onDecline(booking);
+          (onExpire ?? onDecline)(booking);
           return 0;
         }
         if (prev % 3 === 0) {
@@ -68,7 +76,7 @@ export function IncomingRideModal({
 
   if (!booking) return null;
 
-  const progressPercent = (secondsRemaining / RING_DURATION) * 100;
+  const progressPercent = Math.min(100, (secondsRemaining / total) * 100);
 
   return (
     <Modal visible={Boolean(booking)} animationType="slide" transparent={true}>
@@ -84,7 +92,9 @@ export function IncomingRideModal({
             <View>
               <View style={styles.dispatchPill}>
                 <View style={styles.pulseDot} />
-                <Text style={styles.dispatchPillText}>INCOMING DISPATCH · {secondsRemaining}s</Text>
+                <Text style={styles.dispatchPillText}>
+                  {booking.offer_expires_at ? 'RIDE OFFER FOR YOU' : 'INCOMING DISPATCH'} · {secondsRemaining}s
+                </Text>
               </View>
               <Text style={[styles.vehicleTag, isDark && styles.textWhite]}>
                 {booking.vehicle_name || 'Orange Electric Chauffeur'}
@@ -173,9 +183,9 @@ export function IncomingRideModal({
               </Text>
             </View>
             <View style={[styles.metricItem, isDark && styles.metricItemDark]}>
-              <ShieldCheck size={14} color="#10B981" />
+              {etaLabel ? <Car size={14} color="#10B981" /> : <ShieldCheck size={14} color="#10B981" />}
               <Text style={[styles.metricText, isDark && styles.textWhite]}>
-                Fare shown to rider
+                {etaLabel ?? 'Fare shown to rider'}
               </Text>
             </View>
           </View>

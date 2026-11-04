@@ -51,6 +51,17 @@ import { registerForDriverPushNotificationsAsync, sendDriverLocalNotification } 
 import { getTodayOnlineDutySeconds, recordChauffeurOnline, recordChauffeurOffline } from './src/lib/dutyTracker';
 import { resolveDriverRowForUser } from './src/lib/driverIdentity';
 import { isMissingRpcError, isNetworkError, REPLAYABLE_FROM_STATUSES } from './src/lib/supabaseErrors';
+import {
+  acceptErrorMessage,
+  declineRideOffer,
+  demandHintText,
+  fetchAcceptanceRate,
+  fetchDemandHint,
+  fetchRideOffers,
+  navigateUrl,
+  pickOffer,
+  type DemandHint,
+} from './src/lib/rideOffers';
 
 import * as TaskManager from 'expo-task-manager';
 import { partnerLedger } from './src/lib/ledger';
@@ -478,7 +489,7 @@ function MainChauffeurApp() {
         todayHours: dutyHours,
         cashCollected: cashTotal,
         rating: Number(activeDriver?.rating) || 0,
-        acceptanceRate: null, // declined requests aren't recorded, so there is no real rate yet
+        acceptanceRate: await fetchAcceptanceRate(supabase), // ride offers answered, last 30 days
         totalEarnings: allNetEarnings,  // Lifetime net earnings
         totalTrips: totalTripsCount,    // Lifetime total trips
       };
@@ -813,6 +824,9 @@ function MainChauffeurApp() {
   const declinedBookingIdsRef = useRef<string[]>(declinedBookingIds);
   declinedBookingIdsRef.current = declinedBookingIds;
   const incomingHandlerRef = useRef<((payload: any) => Promise<void>) | null>(null);
+  // true once the server has ride offers (top 3 closest first); null = not known yet.
+  const offersSupportedRef = useRef<boolean | null>(null);
+  const [demandHint, setDemandHint] = useState<DemandHint | null>(null);
 
   // Pre-accepted scheduled rides live in the database (they were only kept in memory before).
   const loadClaimedScheduledRides = async (driverId?: string) => {
@@ -924,6 +938,29 @@ function MainChauffeurApp() {
       const driver = driverRef.current;
       const driverLocation = driverLocationRef.current;
       if (!driver || activeBookingRef.current || incomingBookingRef.current) return;
+
+      // Ride offers: the server says which rides this chauffeur may take right now.
+      try {
+        const { supported, offers } = await fetchRideOffers(supabase);
+        offersSupportedRef.current = supported;
+        if (supported) {
+          const pick = pickOffer(offers, (id) => declinedBookingIdsRef.current.includes(id));
+          if (!pick) return;
+          const { data: offered } = await supabase.from('bookings').select('*').eq('id', pick.booking_id).maybeSingle();
+          if (offered && offered.status === 'searching' && !offered.driver_id && !activeBookingRef.current && !incomingBookingRef.current) {
+            await triggerIncomingBookingAlert({
+              ...(offered as Booking),
+              offer_expires_at: pick.expires_at,
+              offer_eta_seconds: pick.eta_seconds,
+              offer_is_open: pick.is_open,
+            });
+          }
+          return;
+        }
+      } catch {
+        return; // network hiccup: try again on the next poll
+      }
+
       try {
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
         const { data: searchingBookings, error } = await supabase
@@ -984,8 +1021,9 @@ function MainChauffeurApp() {
       if (state === 'active') checkForPendingDispatches();
     });
 
-    // Polling fallback every 3 seconds to guarantee no missed rides
-    const pollTimer = setInterval(checkForPendingDispatches, 15000);
+    // Polling fallback (offers last 20 seconds, so check every 5; this also moves the server's
+    // offer rounds along when the database has no scheduler).
+    const pollTimer = setInterval(checkForPendingDispatches, 5000);
 
     // Supabase Realtime Channel for Instant Broadcasts
     // One handler, three filtered subscriptions (instead of every booking change RLS allowed):
@@ -1000,8 +1038,12 @@ function MainChauffeurApp() {
           const declinedBookingIds = declinedBookingIdsRef.current;
           if (!driver) return;
 
-          // If a new booking is searching and not assigned
-          if (
+          // With ride offers the server decides who sees a new ride: ask it instead.
+          if (offersSupportedRef.current && newBooking.status === 'searching' && !newBooking.driver_id) {
+            if (!activeBooking && !incomingBooking) void checkForPendingDispatches();
+          }
+          // If a new booking is searching and not assigned (older server without ride offers)
+          else if (
             newBooking.status === 'searching' &&
             !newBooking.driver_id &&
             !activeBooking &&
@@ -1102,6 +1144,13 @@ function MainChauffeurApp() {
       .channel(`driver-my-bookings-${driver.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings', filter: `driver_id=eq.${driver.id}` }, handleBookingChange)
       .subscribe();
+    // A new offer for this chauffeur (also arrives as a push notification).
+    const offersChannel = supabase
+      .channel(`driver-offers-${driver.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_offers', filter: `driver_id=eq.${driver.id}` }, () => {
+        void checkForPendingDispatches();
+      })
+      .subscribe();
     incomingHandlerRef.current = handleBookingChange;
 
     return () => {
@@ -1110,6 +1159,7 @@ function MainChauffeurApp() {
       incomingHandlerRef.current = null;
       supabase.removeChannel(searchingChannel);
       supabase.removeChannel(myChannel);
+      supabase.removeChannel(offersChannel);
     };
   }, [isOnline, driver?.id]);
 
@@ -1165,17 +1215,16 @@ function MainChauffeurApp() {
     }
   };
 
-  const handleRideAlreadyClaimed = async (bookingId: string) => {
+  const handleRideAlreadyClaimed = async (bookingId: string, serverError?: string) => {
     await soundService.stopDispatchAlert();
     setIncomingBooking(null);
-    setDeclinedBookingIds((prev) => [...prev, bookingId]);
+    const msg = acceptErrorMessage(serverError);
+    // "Offered to closer chauffeurs" may come back to this chauffeur in a later round.
+    if (msg.title !== 'Offered to closer chauffeurs') setDeclinedBookingIds((prev) => [...prev, bookingId]);
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     } catch {}
-    Alert.alert(
-      'Ride Already Claimed',
-      'Another chauffeur accepted this ride just before you. Your console is active and ready for the next dispatch.'
-    );
+    Alert.alert(msg.title, msg.body);
   };
 
   // Accept Ride Handler in Supabase with Atomic Concurrency Lock
@@ -1197,7 +1246,7 @@ function MainChauffeurApp() {
 
       if (!rpcErr && rpcRes) {
         if (!rpcRes.success) {
-          await handleRideAlreadyClaimed(booking.id);
+          await handleRideAlreadyClaimed(booking.id, rpcRes.error);
           return;
         }
 
@@ -1217,6 +1266,10 @@ function MainChauffeurApp() {
 
       // A real RPC error (driver suspended, booking invalid, etc.) is a server decision. Falling back
       // to a direct table update would bypass it, so the fallback is reserved for "RPC not deployed".
+      if (rpcErr && /offered to other chauffeurs/i.test(rpcErr.message || '')) {
+        await handleRideAlreadyClaimed(booking.id, rpcErr.message);
+        return;
+      }
       if (rpcErr && !isMissingRpcError(rpcErr)) {
         console.warn('accept_booking rejected:', rpcErr);
         Alert.alert('Unable to Accept', rpcErr.message || 'The server rejected this ride. Please try the next one.');
@@ -1269,6 +1322,8 @@ function MainChauffeurApp() {
     } catch {}
     await soundService.stopDispatchAlert();
     setDeclinedBookingIds((prev) => [...prev, booking.id]);
+    // Tell the server, so the next chauffeur is offered the ride straight away.
+    void declineRideOffer(supabase, booking.id);
     
     try {
       const decsStr = await AsyncStorage.getItem("orange_declines");
@@ -1283,6 +1338,33 @@ function MainChauffeurApp() {
 
     setIncomingBooking(null);
   };
+
+  // The offer ran out without an answer: just close it (the server records it as not answered).
+  // Not a decline, so the ride can still come back if it is opened to everyone nearby.
+  const handleOfferExpired = async (booking: Booking) => {
+    if (!booking.offer_expires_at) return handleDeclineRide(booking); // older server: as before
+    await soundService.stopDispatchAlert();
+    if (incomingBookingRef.current?.id === booking.id) setIncomingBooking(null);
+  };
+
+  // "Riders are waiting nearby": checked every minute while online with no ride.
+  useEffect(() => {
+    if (!isOnline || activeBooking) {
+      setDemandHint(null);
+      return;
+    }
+    let alive = true;
+    const load = async () => {
+      const h = await fetchDemandHint(supabase);
+      if (alive) setDemandHint(h);
+    };
+    load();
+    const t = setInterval(load, 60000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [isOnline, Boolean(activeBooking)]);
 
   // Status Transitions (Arrived, OTP Verify, Completed) in Supabase
   const handleRideStatusUpdate = async (
@@ -1637,6 +1719,22 @@ function MainChauffeurApp() {
               </View>
             </View>
 
+            {demandHint && (
+              <TouchableOpacity
+                style={[styles.demandHint, theme === 'light' && styles.demandHintLight]}
+                onPress={() => Linking.openURL(navigateUrl(demandHint)).catch(() => {})}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Riders waiting in ${demandHint.area}. Open directions.`}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.demandHintTitle, theme === 'light' && styles.textDark]}>Riders waiting in {demandHint.area}</Text>
+                  <Text style={styles.demandHintBody}>{demandHintText(demandHint)}</Text>
+                </View>
+                <Text style={styles.demandHintCta}>Directions</Text>
+              </TouchableOpacity>
+            )}
+
             {/* Quick Metrics Bar - Today's Performance */}
             <View style={[styles.quickMetricsRow, theme === 'light' && styles.quickMetricsRowLight]}>
               <View style={styles.quickMetricCol}>
@@ -1719,6 +1817,7 @@ function MainChauffeurApp() {
           booking={incomingBooking}
           onAccept={handleAcceptRide}
           onDecline={handleDeclineRide}
+          onExpire={handleOfferExpired}
           theme={theme}
         />
 
@@ -2114,6 +2213,37 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 12,
     marginTop: 2,
+  },
+  demandHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(249, 115, 22, 0.12)',
+    borderColor: 'rgba(249, 115, 22, 0.35)',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  demandHintLight: {
+    backgroundColor: '#FFF7ED',
+  },
+  demandHintTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  demandHintBody: {
+    color: '#94A3B8',
+    fontSize: 11.5,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  demandHintCta: {
+    color: '#F97316',
+    fontSize: 13,
+    fontWeight: '700',
   },
 
   quickMetricsRow: {
