@@ -770,7 +770,9 @@ function MainChauffeurApp() {
                 await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
                   accuracy: Location.Accuracy.Balanced,
                   timeInterval: 15000,
-                  distanceInterval: 20,
+                  // 0: report every 15 s even when parked, so a chauffeur waiting for rides with the
+                  // app in the background isn't treated as offline (3-minute live rule).
+                  distanceInterval: 0,
                   showsBackgroundLocationIndicator: true,
                   foregroundService: {
                     notificationTitle: 'Orange Chauffeur Active',
