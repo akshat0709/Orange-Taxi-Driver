@@ -24,7 +24,7 @@ import { supabase } from '../lib/supabase';
 import { accountStatus } from '../lib/accountStatus';
 import { resolveDriverRowForUser } from '../lib/driverIdentity';
 import { Driver } from '../types';
-import { aadhaarDigits, formatAadhaar, isValidAadhaar, maskAadhaar } from '../lib/aadhaar';
+import { aadhaarDigits, aadhaarHint, formatAadhaar, isValidAadhaar, maskAadhaar } from '../lib/aadhaar';
 import { savePendingApplication, submitPendingApplication } from '../lib/pendingApplication';
 
 interface ChauffeurAuthModalProps {
@@ -75,8 +75,9 @@ export function ChauffeurAuthModal({
   const [cdlNumber, setCdlNumber] = useState('');
   const [aadhaarNumber, setAadhaarNumber] = useState('');
 
-// Holds the digits as typed. The old version replaced them with "XXXX" while typing, so the
-// next keystroke wiped the digits already entered. Only the masked form is saved (see aadhaar.ts).
+// Holds the digits as typed. The field shows exactly those digits (no spaces added while typing:
+// on some Android keyboards, changing the text under the cursor made digits jump, double or
+// vanish). The grouped form is shown underneath. Only the masked form is saved (see aadhaar.ts).
 const handleAadhaarChange = (text: string) => {
     setAadhaarNumber(aadhaarDigits(text));
 };
@@ -420,7 +421,10 @@ const handleAadhaarChange = (text: string) => {
     }
 
     if (!isValidAadhaar(aadhaarNumber)) {
-      Alert.alert('Check Aadhaar Number', 'Please enter your 12-digit Aadhaar number exactly as printed on the card.');
+      Alert.alert(
+        'Check Aadhaar Number',
+        aadhaarHint(aadhaarNumber) ?? `Please enter all 12 digits (you entered ${aadhaarNumber.length}).`
+      );
       return;
     }
 
@@ -813,16 +817,29 @@ const handleAadhaarChange = (text: string) => {
                   <View style={[styles.inputRow, isLight && styles.inputRowLight]}>
                     <TextInput
                       style={[styles.textInput, isLight && styles.textInputLight]}
-                      placeholder="e.g. 1234 5678 9012"
+                      placeholder="12-digit Aadhaar number"
                       placeholderTextColor={placeholderColor}
-                      keyboardType="numeric"
-                      value={formatAadhaar(aadhaarNumber)}
+                      keyboardType="number-pad"
+                      value={aadhaarNumber}
                       onChangeText={handleAadhaarChange}
-                      maxLength={14}
                       autoComplete="off"
+                      autoCorrect={false}
                       importantForAutofill="no"
+                      accessibilityLabel="Aadhaar number"
                     />
                   </View>
+                  {aadhaarNumber.length > 0 && (
+                    <Text
+                      style={{
+                        marginTop: 6,
+                        fontSize: 12,
+                        color: aadhaarHint(aadhaarNumber) ? '#EF4444' : isLight ? '#64748B' : '#94A3B8',
+                      }}
+                    >
+                      {aadhaarHint(aadhaarNumber) ??
+                        `${formatAadhaar(aadhaarNumber)}  ·  ${aadhaarNumber.length}/12 digits`}
+                    </Text>
+                  )}
                 </View>
 
                 <View style={styles.inputGroup}>

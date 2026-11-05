@@ -4,9 +4,29 @@
 // them grouped as "1234 5678 9012". Only a masked form, "XXXX-XXXX-9012", is ever saved: UIDAI
 // rules don't allow storing full Aadhaar numbers, and the admin checks the uploaded card anyway.
 
-/** Digits only, at most 12. */
+// Keyboards on phones set to Hindi, Marathi, Bengali, etc. can type that script's digits
+// (e.g. "१२३४"). They are turned into 0-9 instead of being dropped.
+const DIGIT_ZEROS = [0x0966, 0x09e6, 0x0a66, 0x0ae6, 0x0b66, 0x0be6, 0x0c66, 0x0ce6, 0x0d66, 0x0660, 0x06f0, 0xff10];
+function toAsciiDigits(text: string): string {
+  return text.replace(/[^\x00-\x7f]/g, (ch) => {
+    const code = ch.charCodeAt(0);
+    for (const zero of DIGIT_ZEROS) {
+      if (code >= zero && code <= zero + 9) return String(code - zero);
+    }
+    return ch;
+  });
+}
+
+/** Digits only (any script's digits become 0-9), at most 12. */
 export function aadhaarDigits(text: string): string {
-  return (text || '').replace(/\D/g, '').slice(0, 12);
+  return toAsciiDigits(text || '').replace(/\D/g, '').slice(0, 12);
+}
+
+/** Message under the field once 12 digits are in, or null while typing / when fine. */
+export function aadhaarHint(digits: string): string | null {
+  if (digits.length < 12) return null;
+  if (/^[01]/.test(digits)) return 'Aadhaar numbers never start with 0 or 1. Please check the number.';
+  return isValidAadhaar(digits) ? null : "This doesn't match a real Aadhaar number. Please check the digits on the card.";
 }
 
 /** "123456789012" -> "1234 5678 9012" (partial input is grouped the same way). */
